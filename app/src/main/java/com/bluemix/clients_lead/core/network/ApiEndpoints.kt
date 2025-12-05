@@ -10,7 +10,7 @@ object ApiEndpoints {
     // For Android Emulator: "http://10.0.2.2:5000"
     // For Physical Device: "http://YOUR_LOCAL_IP:5000" (e.g., "http://192.168.1.5:5000")
     // For Production: "https://api.yourdomain.com"
-    const val BASE_URL = "http://192.168.1.17:5000"
+    const val BASE_URL = "http://10.0.2.2:5000"
 
     /**
      * Authentication endpoints
@@ -49,4 +49,8 @@ object ApiEndpoints {
         const val ROOT = "/"
         const val DB_TEST = "/dbtest"
     }
+
+
+    const val SUBMIT_EXPENSE = "/api/expenses"
+    const val GET_EXPENSES = "/api/expenses"
 }

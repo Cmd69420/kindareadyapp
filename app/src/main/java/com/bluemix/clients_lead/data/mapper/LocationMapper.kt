@@ -12,7 +12,8 @@ fun LocationLogDto.toDomain(): LocationLog {
         longitude = longitude,
         accuracy = accuracy,
         timestamp = timestamp ?: "",
-        createdAt = createdAt ?: ""
+        createdAt = createdAt ?: "",
+        battery = battery?: 0
     )
 }
 

@@ -50,7 +50,8 @@ interface ILocationRepository {
         userId: String,
         latitude: Double,
         longitude: Double,
-        accuracy: Double? = null
+        accuracy: Double? = null,
+        battery: Int? = null
     ): AppResult<LocationLog>
 
     /**

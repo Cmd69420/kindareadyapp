@@ -26,7 +26,8 @@ class LocationRepositoryImpl(
         userId: String,
         latitude: Double,
         longitude: Double,
-        accuracy: Double?
+        accuracy: Double?,
+        battery: Int?
     ): AppResult<LocationLog> = withContext(Dispatchers.IO) {
         runAppCatching(mapper = { it.toAppError() }) {
             val response = httpClient.post(ApiEndpoints.Location.LOGS) {
@@ -34,7 +35,8 @@ class LocationRepositoryImpl(
                     CreateLocationRequest(
                         latitude = latitude,
                         longitude = longitude,
-                        accuracy = accuracy
+                        accuracy = accuracy,
+                        battery = battery
                     )
                 )
             }.body<CreateLocationResponse>()
@@ -90,7 +92,8 @@ data class CreateLocationRequest(
     val longitude: Double,
     val accuracy: Double? = null,
     val activity: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val battery: Int? = null
 )
 
 // ==================== Response Models ====================
@@ -116,7 +119,8 @@ data class BackendLocationLog(
     val accuracy: Double? = null,
     val activity: String? = null,
     val notes: String? = null,
-    val timestamp: String
+    val timestamp: String,
+    val battery: Int? = null
 )
 
 @Serializable
@@ -137,6 +141,7 @@ fun BackendLocationLog.toLocationLogDto(): LocationLogDto {
         latitude = this.latitude,
         longitude = this.longitude,
         accuracy = this.accuracy,
-        timestamp = this.timestamp
+        timestamp = this.timestamp,
+        battery = this.battery
     )
 }

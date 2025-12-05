@@ -6,6 +6,7 @@ import android.app.Service
 import android.content.Intent
 import android.location.Location
 import android.os.Binder
+import com.bluemix.clients_lead.features.location.BatteryUtils
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.bluemix.clients_lead.R
@@ -60,7 +61,7 @@ class LocationTrackerService : Service() {
     private var lastSavedTime = System.currentTimeMillis()
 
     // Configuration
-    private val saveInterval = 5 * 60 * 1000L // 5 minutes (configurable)
+    private val saveInterval = 1 * 60 * 1000L // 5 minutes (configurable)
 
     override fun onBind(intent: Intent?): IBinder {
         return LocationBinder()
@@ -179,15 +180,18 @@ class LocationTrackerService : Service() {
     }
 
     private suspend fun saveLocationToDatabase(userId: String, location: Location) {
+        val battery = BatteryUtils.getBatteryPercentage(this)
         try {
             when (val result = insertLocationLog(
                 userId = userId,
                 latitude = location.latitude,
                 longitude = location.longitude,
-                accuracy = location.accuracy.toDouble()
+                accuracy = location.accuracy.toDouble(),
+                battery = battery
+                 // NEW
             )) {
                 is AppResult.Success -> {
-                    Timber.d("Location saved: ${result.data.id} at ${result.data.timestamp}")
+                    Timber.d("Location saved: ${result.data.id} at ${result.data.timestamp} | Battery: $battery%")
                 }
                 is AppResult.Error -> {
                     Timber.e(result.error.cause, "Failed to save location: ${result.error.message}")

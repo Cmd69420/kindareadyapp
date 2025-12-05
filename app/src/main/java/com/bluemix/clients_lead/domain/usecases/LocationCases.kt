@@ -14,8 +14,9 @@ class InsertLocationLog(
         userId: String,
         latitude: Double,
         longitude: Double,
-        accuracy: Double? = null
-    ): AppResult<LocationLog> = repository.insertLocationLog(userId, latitude, longitude, accuracy)
+        accuracy: Double? = null,
+        battery: Int? = null
+    ): AppResult<LocationLog> = repository.insertLocationLog(userId, latitude, longitude, accuracy, battery)
 }
 
 /**

@@ -7,5 +7,6 @@ data class LocationLog(
     val longitude: Double,
     val accuracy: Double?,
     val timestamp: String,
-    val createdAt: String
+    val createdAt: String,
+    val battery: Int
 )
