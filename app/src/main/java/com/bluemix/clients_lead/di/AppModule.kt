@@ -30,7 +30,7 @@ val appModule = module {
     single { TokenStorage(androidContext()) }
     single { SessionManager(get()) }
 
-    // HttpClient (correct signature)
+    // HttpClient
     single {
         ApiClientProvider.create(
             baseUrl = ApiEndpoints.BASE_URL,
@@ -48,8 +48,18 @@ val appModule = module {
     factory { InsertLocationLog(get()) }
 
     // ViewModels
-    viewModel { SessionViewModel(
-        get(), get()
-    ) }
-    viewModel { MapViewModel(get(), get()) }
+    viewModel {
+        SessionViewModel(
+            get(), get()
+        )
+    }
+
+    // Now inject LocationTrackingStateManager as third dependency
+    viewModel {
+        MapViewModel(
+            get(), // GetClientsWithLocation
+            get(), // GetCurrentUserId
+            get()  // LocationTrackingStateManager
+        )
+    }
 }

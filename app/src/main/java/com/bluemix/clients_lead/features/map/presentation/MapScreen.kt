@@ -1,35 +1,28 @@
 package com.bluemix.clients_lead.features.map.presentation
 
 import android.Manifest
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.setValue
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,32 +31,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
@@ -75,26 +61,20 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.google.maps.android.compose.CameraPositionState
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
 import ui.components.Scaffold
+import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
-import ui.components.Text
-import com.bluemix.clients_lead.core.navigation.Route
-/**
- * Map screen displaying clients with geographic locations.
- *
- * Features:
- * - Interactive Google Maps with client markers
- * - Color-coded markers based on client status
- * - Permission handling for location access
- * - Client details bottom sheet
- * - Navigate to client location
- */
 
 // Default location (Mumbai, India)
 private val DefaultLocation = LatLng(19.0760, 72.8777)
@@ -121,6 +101,9 @@ fun MapScreen(
     LaunchedEffect(Unit) {
         if (!locationPermissions.allPermissionsGranted) {
             locationPermissions.launchMultiplePermissionRequest()
+        } else {
+            // If permissions are already granted, ensure tracking state is synced
+            viewModel.refreshTrackingState()
         }
     }
 
@@ -163,7 +146,6 @@ fun MapScreen(
                         color = AppTheme.colors.text
                     )
 
-
                     val rotation by animateFloatAsState(
                         targetValue = if (isRefreshing) 360f else 0f,
                         animationSpec = tween(600),
@@ -184,7 +166,6 @@ fun MapScreen(
                             modifier = Modifier.graphicsLayer { rotationZ = rotation }
                         )
                     }
-
                 }
             }
         }
@@ -208,27 +189,30 @@ fun MapScreen(
                     mapToolbarEnabled = false
                 )
             ) {
-                uiState.clients.forEach { client ->
-                    if (client.latitude != null && client.longitude != null) {
-                        val position = LatLng(client.latitude, client.longitude)
+                // Security: only render markers when tracking is enabled
+                if (uiState.isTrackingEnabled) {
+                    uiState.clients.forEach { client ->
+                        if (client.latitude != null && client.longitude != null) {
+                            val position = LatLng(client.latitude, client.longitude)
 
-                        Marker(
-                            state = MarkerState(position = position),
-                            title = client.name,
-                            snippet = client.address ?: "No address",
-                            icon = BitmapDescriptorFactory.defaultMarker(
-                                when (client.status) {
-                                    "active" -> BitmapDescriptorFactory.HUE_GREEN
-                                    "inactive" -> BitmapDescriptorFactory.HUE_AZURE
-                                    "completed" -> BitmapDescriptorFactory.HUE_BLUE
-                                    else -> BitmapDescriptorFactory.HUE_RED
+                            Marker(
+                                state = MarkerState(position = position),
+                                title = client.name,
+                                snippet = client.address ?: "No address",
+                                icon = BitmapDescriptorFactory.defaultMarker(
+                                    when (client.status) {
+                                        "active" -> BitmapDescriptorFactory.HUE_GREEN
+                                        "inactive" -> BitmapDescriptorFactory.HUE_AZURE
+                                        "completed" -> BitmapDescriptorFactory.HUE_BLUE
+                                        else -> BitmapDescriptorFactory.HUE_RED
+                                    }
+                                ),
+                                onClick = {
+                                    viewModel.selectClient(client)
+                                    true
                                 }
-                            ),
-                            onClick = {
-                                viewModel.selectClient(client)
-                                true
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -296,19 +280,9 @@ fun MapScreen(
                 }
             }
 
-            // Animated Stats Badge
+            // "Clocked-In" badge
             AnimatedVisibility(
-                visible = !uiState.isLoading && uiState.error == null && uiState.clients.isNotEmpty(),
-                modifier = Modifier.align(Alignment.TopCenter),
-                enter = slideInVertically() + fadeIn() + expandVertically(),
-                exit = slideOutVertically() + fadeOut() + shrinkVertically()
-            ) {
-                AnimatedStatsCard(clientCount = uiState.clients.size)
-            }
-
-
-            AnimatedVisibility(
-                visible = uiState.userClockedIn,
+                visible = uiState.userClockedIn && uiState.isTrackingEnabled,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = 70.dp, start = 16.dp),
@@ -329,10 +303,43 @@ fun MapScreen(
                 }
             }
 
-
-            // Enhanced Bottom Sheet
+            // Small "Tracking Active" indicator (top-right)
             AnimatedVisibility(
-                visible = uiState.selectedClient != null,
+                visible = uiState.isTrackingEnabled,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 70.dp, end = 16.dp),
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(AppTheme.colors.primary.copy(alpha = 0.12f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = AppTheme.colors.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Tracking Active",
+                            style = AppTheme.typography.label2,
+                            color = AppTheme.colors.primary
+                        )
+                    }
+                }
+            }
+
+            // Bottom Sheet for selected client (only when tracking enabled)
+            AnimatedVisibility(
+                visible = uiState.selectedClient != null && uiState.isTrackingEnabled,
                 modifier = Modifier.align(Alignment.BottomCenter),
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
@@ -347,7 +354,7 @@ fun MapScreen(
                 }
             }
 
-            // Animated Permission Prompt
+            // Permission Prompt (still shown if permissions missing)
             AnimatedVisibility(
                 visible = !locationPermissions.allPermissionsGranted,
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -358,65 +365,15 @@ fun MapScreen(
                     onGrant = { locationPermissions.launchMultiplePermissionRequest() }
                 )
             }
-        }
-    }
-}
 
-private fun RowScope.mutableStateOf(bool: Boolean) {}
-
-@Composable
-private fun AnimatedStatsCard(clientCount: Int) {
-    var isVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(300)
-        isVisible = true
-    }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.8f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "statsScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .padding(top = 16.dp)
-            .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        AppTheme.colors.surface,
-                        AppTheme.colors.surface.copy(alpha = 0.95f)
-                    )
-                )
-            )
-            .padding(horizontal = 20.dp, vertical = 14.dp)
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                tint = AppTheme.colors.primary,
-                modifier = Modifier.size(22.dp)
-            )
-
-            AnimatedContent(
-                targetState = clientCount,
-                transitionSpec = {
-                    (slideInVertically { it } + fadeIn()) togetherWith
-                            (slideOutVertically { -it } + fadeOut())
-                },
-                label = "clientCount"
-            ) { count ->
-                Text(
-                    text = "$count Client${if (count != 1) "s" else ""}",
-                    style = AppTheme.typography.h4,
-                    color = AppTheme.colors.text
+            // =========================
+            // Full-screen Tracking Warning
+            // =========================
+            if (!uiState.isTrackingEnabled) {
+                TrackingRequiredOverlay(
+                    modifier = Modifier.fillMaxSize(),
+                    onEnableTracking = { viewModel.enableTracking() },
+                    onRefreshStatus = { viewModel.refreshTrackingState() }
                 )
             }
         }
@@ -424,158 +381,105 @@ private fun AnimatedStatsCard(clientCount: Int) {
 }
 
 @Composable
-private fun AnimatedClientBottomSheet(
-    client: Client,
-    cameraPositionState: CameraPositionState,
-    onClose: () -> Unit,
-    onViewDetails: () -> Unit
+private fun TrackingRequiredOverlay(
+    modifier: Modifier = Modifier,
+    onEnableTracking: () -> Unit,
+    onRefreshStatus: () -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    var isVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(100)
-        isVisible = true
-    }
-
-    val offsetY by animateDpAsState(
-        targetValue = if (isVisible) 0.dp else 20.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "sheetOffset"
-    )
-
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .offset(y = offsetY)
-            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .background(AppTheme.colors.surface)
-            .padding(20.dp)
+        modifier = modifier
+            // 95% opacity overlay to block map visibility
+            .background(AppTheme.colors.background.copy(alpha = 0.95f))
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Icon(
+                imageVector = Icons.Default.LocationOff,
+                contentDescription = null,
+                modifier = Modifier.size(52.dp),
+                tint = AppTheme.colors.primary
+            )
+
+            Text(
+                text = "Location tracking required",
+                style = AppTheme.typography.h3,
+                color = AppTheme.colors.text,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "To protect client data and verify that you are in the correct area, background location tracking must remain active while using the map.",
+                style = AppTheme.typography.body2,
+                color = AppTheme.colors.textSecondary,
+                textAlign = TextAlign.Center
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.Start,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = client.name,
-                        style = AppTheme.typography.h2,
-                        color = AppTheme.colors.text
-                    )
-
-                    // Animated Status Badge
-                    AnimatedStatusBadge(status = client.status)
-                }
-
-                IconButton(onClick = onClose) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = AppTheme.colors.textSecondary
-                    )
-                }
+                TrackingBenefitItem("Verify that you are in the correct service area")
+                TrackingBenefitItem("Show clients that are actually near your location")
+                TrackingBenefitItem("Securely track field visits for compliance")
+                TrackingBenefitItem("Prevent unauthorized access to sensitive client data")
             }
 
-            // Details Section
-            client.address?.let { address ->
-                DetailItem(
-                    icon = Icons.Default.LocationOn,
-                    text = address
-                )
-            }
-
-            if (client.latitude != null && client.longitude != null) {
-                DetailItem(
-                    icon = Icons.Default.MyLocation,
-                    text = "${String.format("%.4f", client.latitude)}, ${String.format("%.4f", client.longitude)}"
-                )
-            }
-
-            // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Button(
+                onClick = onEnableTracking,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
             ) {
-                AnimatedActionButton(
-                    icon = Icons.Default.Directions,
-                    text = "Navigate",
-                    onClick = {
-                        if (client.latitude != null && client.longitude != null) {
-                            coroutineScope.launch {
-                                cameraPositionState.animate(
-                                    CameraUpdateFactory.newLatLngZoom(
-                                        LatLng(client.latitude, client.longitude),
-                                        16f
-                                    ),
-                                    durationMs = 800
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-
-                AnimatedActionButton(
-                    icon = Icons.Default.Info,
-                    text = "Details",
-                    onClick = onViewDetails,
-                    modifier = Modifier.weight(1f),
-                    isPrimary = true
+                Text(
+                    text = "Enable Location Tracking",
+                    style = AppTheme.typography.button
                 )
             }
+
+            OutlinedButton(
+                onClick = onRefreshStatus,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Refresh tracking status",
+                    style = AppTheme.typography.button
+                )
+            }
+
+            Text(
+                text = "We only use your location to verify your working area and log visits. Your data is transmitted securely and never shared with other users.",
+                style = AppTheme.typography.body2,
+                color = AppTheme.colors.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun AnimatedStatusBadge(status: String) {
-    val backgroundColor by animateColorAsState(
-        targetValue = when (status) {
-            "active" -> AppTheme.colors.success.copy(alpha = 0.15f)
-            "inactive" -> AppTheme.colors.disabled
-            "completed" -> AppTheme.colors.tertiary.copy(alpha = 0.15f)
-            else -> AppTheme.colors.surface
-        },
-        animationSpec = tween(300),
-        label = "badgeBackground"
-    )
-
-    Box(
-        modifier = Modifier
-            .padding(top = 4.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(backgroundColor)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = status.uppercase(),
-            style = AppTheme.typography.label3,
-            color = when (status) {
-                "active" -> AppTheme.colors.success
-                "inactive" -> AppTheme.colors.textDisabled
-                "completed" -> AppTheme.colors.tertiary
-                else -> AppTheme.colors.text
-            }
-        )
-    }
-}
-
-@Composable
-private fun DetailItem(icon: ImageVector, text: String) {
+private fun TrackingBenefitItem(text: String) {
     Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = AppTheme.colors.textSecondary,
-            modifier = Modifier.size(18.dp)
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(AppTheme.colors.primary)
         )
         Text(
             text = text,
@@ -585,82 +489,156 @@ private fun DetailItem(icon: ImageVector, text: String) {
     }
 }
 
+/**
+ * Simple animated bottom sheet for a selected client.
+ * Only used when tracking is enabled.
+ */
 @Composable
-private fun AnimatedActionButton(
-    icon: ImageVector,
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isPrimary: Boolean = false
+private fun AnimatedClientBottomSheet(
+    client: Client,
+    cameraPositionState: CameraPositionState,
+    onClose: () -> Unit,
+    onViewDetails: () -> Unit
 ) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "buttonScale"
-    )
-
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .scale(scale)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        tryAwaitRelease()
-                        isPressed = false
-                    }
-                )
-            },
-        colors = if (isPrimary) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .background(AppTheme.colors.surface)
+            .padding(16.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = AppTheme.typography.button)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = client.name,
+                    style = AppTheme.typography.h3,
+                    color = AppTheme.colors.text
+                )
+                IconButton(onClick = onClose) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = AppTheme.colors.text
+                    )
+                }
+            }
+
+            client.address?.let {
+                Text(
+                    text = it,
+                    style = AppTheme.typography.body2,
+                    color = AppTheme.colors.textSecondary
+                )
+            }
+
+            Spacer(modifier = Modifier.size(8.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onViewDetails,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "View Details",
+                        style = AppTheme.typography.button
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        // Center map on this client’s location
+                        if (client.latitude != null && client.longitude != null) {
+                            cameraPositionState.move(
+                                CameraUpdateFactory.newLatLngZoom(
+                                    LatLng(client.latitude, client.longitude),
+                                    16f
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Directions,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Focus on Map",
+                        style = AppTheme.typography.button
+                    )
+                }
+            }
+        }
     }
 }
 
+/**
+ * Simple permission prompt shown at the bottom when location permissions are missing.
+ */
 @Composable
-private fun AnimatedPermissionPrompt(onGrant: () -> Unit) {
+private fun AnimatedPermissionPrompt(
+    onGrant: () -> Unit
+) {
     Box(
         modifier = Modifier
+            .fillMaxWidth()
             .padding(16.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(AppTheme.colors.surface)
-            .padding(20.dp)
+            .padding(16.dp)
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.Start
         ) {
-            Icon(
-                imageVector = Icons.Default.LocationOff,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = AppTheme.colors.primary
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = null,
+                    tint = AppTheme.colors.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Location permission required",
+                    style = AppTheme.typography.body1,
+                    color = AppTheme.colors.text
+                )
+            }
+
             Text(
-                text = "Location permission required",
-                style = AppTheme.typography.h4,
-                color = AppTheme.colors.text,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Enable location to see your position on the map",
+                text = "Please grant location permission so we can show clients near you and start background tracking.",
                 style = AppTheme.typography.body2,
-                color = AppTheme.colors.textSecondary,
-                textAlign = TextAlign.Center
+                color = AppTheme.colors.textSecondary
             )
+
             Button(
                 onClick = onGrant,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Grant Permission")
+                Text(
+                    text = "Grant Permission",
+                    style = AppTheme.typography.button
+                )
             }
         }
     }

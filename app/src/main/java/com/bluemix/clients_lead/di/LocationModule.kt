@@ -6,7 +6,9 @@ import com.bluemix.clients_lead.domain.usecases.DeleteOldLocationLogs
 import com.bluemix.clients_lead.domain.usecases.GetLocationLogs
 import com.bluemix.clients_lead.domain.usecases.GetLocationLogsByDateRange
 import com.bluemix.clients_lead.domain.usecases.InsertLocationLog
+import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
 import com.bluemix.clients_lead.features.timesheet.vm.ActivityViewModel
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
@@ -20,7 +22,9 @@ val locationModule = module {
     factory { GetLocationLogsByDateRange(get()) }
     factory { DeleteOldLocationLogs(get()) }
 
-    // ViewModel
-    viewModel { ActivityViewModel(get(), get()) }  // ✅ Only here now
-}
+    // Tracking state manager (singleton)
+    single { LocationTrackingStateManager(androidContext()) }
 
+    // ViewModel
+    viewModel { ActivityViewModel(get(), get()) }
+}
