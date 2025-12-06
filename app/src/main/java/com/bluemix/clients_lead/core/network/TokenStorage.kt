@@ -2,56 +2,44 @@ package com.bluemix.clients_lead.core.network
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 
 /**
- * Handles storage and retrieval of JWT authentication tokens
- * Replaces Supabase's automatic token management
+ * Handles saving and retrieving auth token locally.
+ * Token survives app restarts, process death, and removing from recents.
  */
 class TokenStorage(context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(
-        PREFS_NAME,
-        Context.MODE_PRIVATE
-    )
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
 
-    /**
-     * Save authentication token
-     */
     fun saveToken(token: String) {
-        prefs.edit().putString(KEY_TOKEN, token).apply()
+        Log.d("TokenStorage", "💾 SAVING TOKEN: ${token.take(20)}...")
+        prefs.edit()
+            .putString("auth_token", token)
+            .apply()
+
+        // Verify it was saved
+        val saved = prefs.getString("auth_token", null)
+        Log.d("TokenStorage", "✅ TOKEN SAVED? ${saved != null} - Value: ${saved?.take(20)}")
     }
 
-    /**
-     * Get stored authentication token
-     * @return Token if exists, null otherwise
-     */
     fun getToken(): String? {
-        return prefs.getString(KEY_TOKEN, null)
+        val token = prefs.getString("auth_token", null)
+        Log.d("TokenStorage", "🔍 GET TOKEN: ${if (token != null) token.take(20) + "..." else "NULL"}")
+        return token
     }
 
-    /**
-     * Check if valid token exists
-     */
     fun hasToken(): Boolean {
-        return !getToken().isNullOrBlank()
+        val has = getToken() != null
+        Log.d("TokenStorage", "❓ HAS TOKEN: $has")
+        return has
     }
 
-    /**
-     * Clear stored token (on logout)
-     */
     fun clearToken() {
-        prefs.edit().remove(KEY_TOKEN).apply()
-    }
-
-    /**
-     * Clear all auth data
-     */
-    fun clearAll() {
-        prefs.edit().clear().apply()
-    }
-
-    companion object {
-        private const val PREFS_NAME = "auth_prefs"
-        private const val KEY_TOKEN = "jwt_token"
+        Log.d("TokenStorage", "🗑️ CLEARING TOKEN")
+        prefs.edit()
+            .remove("auth_token")
+            .apply()
     }
 }

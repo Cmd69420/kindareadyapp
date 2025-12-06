@@ -2,6 +2,7 @@ package com.bluemix.clients_lead.di
 
 import com.bluemix.clients_lead.data.repository.AuthRepositoryImpl
 import com.bluemix.clients_lead.domain.repository.AuthRepository
+import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
 import com.bluemix.clients_lead.domain.usecases.HandleAuthRedirect
 import com.bluemix.clients_lead.domain.usecases.IsLoggedIn
 import com.bluemix.clients_lead.domain.usecases.ObserveAuthState
@@ -12,18 +13,10 @@ import com.bluemix.clients_lead.domain.usecases.SignUpWithEmail
 import com.bluemix.clients_lead.features.auth.vm.AuthViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
-import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
-
 
 val authModule = module {
-    // Repository
-    single<AuthRepository> {
-        AuthRepositoryImpl(
-            httpClient = get(),
-            sessionManager = get(),
-            tokenStorage = get()
-        )
-    }
+    // Repository - already provided in appModule, so remove this
+    // single<AuthRepository> { AuthRepositoryImpl(get(), get(), get()) }
 
     // Use Cases
     factory { SignUpWithEmail(get()) }
@@ -31,13 +24,11 @@ val authModule = module {
     factory { SendMagicLink(get()) }
     factory { HandleAuthRedirect(get()) }
     factory { IsLoggedIn(get()) }
-    factory { IsLoggedIn(get()) }
     factory { ObserveAuthState(get()) }
     factory { SignOut(get()) }
-    factory { GetCurrentUserId(get()) }  // ✅ Fixed naming
-    factory { ObserveAuthState(get()) }
+    factory { GetCurrentUserId(get()) }
 
-    // ViewModel
+    // ViewModel - removed sessionManager and tokenStorage parameters
     viewModel {
         AuthViewModel(
             signUpWithEmail = get(),
@@ -45,7 +36,6 @@ val authModule = module {
             sendMagicLink = get(),
             handleAuthRedirect = get(),
             isLoggedIn = get(),
-            observeAuthState = get(),
             signOut = get(),
             authRedirectUrl = "clientslead://auth"
         )

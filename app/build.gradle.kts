@@ -143,6 +143,9 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.compose)
 
+
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Misc
     implementation(libs.timber)
     testImplementation(libs.junit)
