@@ -3,9 +3,15 @@ package com.bluemix.clients_lead.features.location
 
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.location.Location
+import android.app.ActivityManager
+import com.bluemix.clients_lead.core.network.ApiEndpoints
 import android.os.Binder
+import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.http.*
 import com.bluemix.clients_lead.features.location.BatteryUtils
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -38,12 +44,16 @@ import timber.log.Timber
  * - Proper lifecycle management and memory leak prevention
  * - Authentication checks before starting
  */
+
+
+
 class LocationTrackerService : Service() {
 
     // Lifecycle-aware coroutine management
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(serviceJob + Dispatchers.IO)
 
+    private val httpClient: HttpClient by inject()
 
     private val sessionManager: SessionManager by inject()
     val userId = sessionManager.getCurrentUserId()
@@ -158,7 +168,20 @@ class LocationTrackerService : Service() {
         Timber.d("Starting periodic database save (interval: ${saveInterval / 1000}s)")
 
         periodicSaveJob = scope.launch {
-            // Initial delay to avoid immediate save on start
+            // ⏳ Wait until first valid GPS fix is received
+            while (latestLocation == null && isActive) {
+                Timber.d("Waiting for first GPS fix before initial DB save…")
+                delay(1000)
+            }
+
+            // 1️⃣ FIRST SAVE IMMEDIATELY
+            latestLocation?.let { location ->
+                Timber.d("Saving FIRST location immediately (clock-in)")
+                saveLocationToDatabase(userId, location)
+                lastSavedTime = System.currentTimeMillis()
+            }
+
+            // 2️⃣ START PERIODIC SAVING
             delay(saveInterval)
 
             while (isActive) {
@@ -167,10 +190,10 @@ class LocationTrackerService : Service() {
 
                 if (timeSinceLastSave >= saveInterval) {
                     latestLocation?.let { location ->
-                        Timber.d("Saving location to database (periodic trigger)")
+                        Timber.d("Saving location to database (periodic update)")
                         saveLocationToDatabase(userId, location)
                         lastSavedTime = currentTime
-                    } ?: Timber.w("No location data available to save")
+                    } ?: Timber.w("No GPS fix available to save")
                 }
 
                 // Check every minute
@@ -178,6 +201,19 @@ class LocationTrackerService : Service() {
             }
         }
     }
+
+
+
+    suspend fun clearUserPincode() {
+        try {
+            httpClient.post(ApiEndpoints.User.CLEAR_PINCODE)
+            Timber.d("Pincode cleared successfully on backend")
+        } catch (e: Exception) {
+            Timber.e("Failed to clear pincode: ${e.message}")
+        }
+    }
+
+
 
     private suspend fun saveLocationToDatabase(userId: String, location: Location) {
         val battery = BatteryUtils.getBatteryPercentage(this)
@@ -203,6 +239,11 @@ class LocationTrackerService : Service() {
     }
     private fun stop() {
         Timber.d("Stopping location tracking service")
+
+        scope.launch {
+            clearUserPincode()
+        }
+
 
         // Cancel tracking jobs
         locationTrackingJob?.cancel()
@@ -238,6 +279,25 @@ class LocationTrackerService : Service() {
         private const val NOTIFICATION_ID = 1
     }
 }
+
+
+fun isTrackingServiceRunning(context: Context): Boolean {
+    try {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+            if (service.service.className == LocationTrackerService::class.java.name) {
+                return true
+            }
+        }
+    } catch (_: Exception) {}
+
+    // Fallback check — foreground service notification exists
+    val notificationServiceId = 1  // same as NOTIFICATION_ID in service
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val notifications = notificationManager.activeNotifications
+    return notifications.any { it.id == notificationServiceId }
+}
+
 
 //class LocationTrackerService : Service() {
 //

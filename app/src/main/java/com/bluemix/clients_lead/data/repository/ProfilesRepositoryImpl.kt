@@ -33,6 +33,11 @@ class ProfileRepositoryImpl(
         context.getSharedPreferences("profile_prefs", Context.MODE_PRIVATE)
     }
 
+
+    interface UserRepository {
+        suspend fun clearUserPincode()
+    }
+
     override suspend fun getProfile(userId: String): AppResult<UserProfile> =
         withContext(Dispatchers.IO) {
             Timber.tag(TAG).d("Getting profile for userId: $userId")

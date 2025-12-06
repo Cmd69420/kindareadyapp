@@ -84,7 +84,7 @@ import ui.components.Scaffold
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
 import ui.components.Text
-
+import com.bluemix.clients_lead.core.navigation.Route
 /**
  * Map screen displaying clients with geographic locations.
  *
@@ -184,6 +184,7 @@ fun MapScreen(
                             modifier = Modifier.graphicsLayer { rotationZ = rotation }
                         )
                     }
+
                 }
             }
         }
@@ -304,6 +305,30 @@ fun MapScreen(
             ) {
                 AnimatedStatsCard(clientCount = uiState.clients.size)
             }
+
+
+            AnimatedVisibility(
+                visible = uiState.userClockedIn,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 70.dp, start = 16.dp),
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(AppTheme.colors.success.copy(alpha = 0.15f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Clocked-In",
+                        style = AppTheme.typography.label2,
+                        color = AppTheme.colors.success
+                    )
+                }
+            }
+
 
             // Enhanced Bottom Sheet
             AnimatedVisibility(

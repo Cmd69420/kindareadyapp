@@ -28,4 +28,8 @@ sealed class Route {
 
     @Serializable
     data class ClientDetail(val clientId: String) : Route()
+
+    // NEW SCREEN FOR EXPENSE FORM
+    @Serializable
+    data object ExpenseForm : Route()
 }

@@ -70,4 +70,7 @@ class SessionManager(
     fun hasStoredSession(): Boolean {
         return tokenStorage.hasToken()
     }
+
+
+
 }

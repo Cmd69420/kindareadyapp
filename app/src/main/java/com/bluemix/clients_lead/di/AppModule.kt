@@ -48,6 +48,8 @@ val appModule = module {
     factory { InsertLocationLog(get()) }
 
     // ViewModels
-    viewModel { SessionViewModel(get(), get()) }
+    viewModel { SessionViewModel(
+        get(), get()
+    ) }
     viewModel { MapViewModel(get(), get()) }
 }

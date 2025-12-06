@@ -1,4 +1,3 @@
-// presentation/map/MapViewModel.kt
 package com.bluemix.clients_lead.features.map.vm
 
 import androidx.lifecycle.ViewModel
@@ -19,18 +18,10 @@ data class MapUiState(
     val clients: List<Client> = emptyList(),
     val currentLocation: LatLng? = null,
     val selectedClient: Client? = null,
+    val userClockedIn: Boolean = false,   // <-- Here
     val error: String? = null
 )
 
-/**
- * ViewModel for map screen displaying client locations.
- *
- * Improvements from previous version:
- * - Removed Context dependency (Android framework dependency in ViewModel)
- * - Removed direct Supabase dependency (use repository pattern)
- * - Uses use cases for data access
- * - Consistent with ClientsViewModel architecture
- */
 class MapViewModel(
     private val getClientsWithLocation: GetClientsWithLocation,
     private val getCurrentUserId: GetCurrentUserId
@@ -48,7 +39,6 @@ class MapViewModel(
             Timber.d("Loading clients with location...")
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-            // Get current user ID from auth repository
             val userId = getCurrentUserId()
             if (userId == null) {
                 Timber.e("User not authenticated")
@@ -64,18 +54,20 @@ class MapViewModel(
             when (val result = getClientsWithLocation(userId)) {
                 is AppResult.Success -> {
                     val clients = result.data
-                    Timber.d("Successfully loaded ${clients.size} clients with location")
+
+                    val clockedIn = clients.isNotEmpty()   // First location logged = first clients visible
+
+                    Timber.d("Loaded ${clients.size} clients. Clocked-In = $clockedIn")
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        clients = clients
+                        clients = clients,
+                        userClockedIn = clockedIn
                     )
                 }
 
                 is AppResult.Error -> {
-                    Timber.e(
-                        result.error.message,
-                        "Failed to load clients: ${result.error.message}"
-                    )
+                    Timber.e(result.error.message, "Failed to load clients")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = result.error.message ?: "Failed to load clients"
@@ -93,7 +85,5 @@ class MapViewModel(
         _uiState.value = _uiState.value.copy(selectedClient = client)
     }
 
-    fun refresh() {
-        loadClients()
-    }
+    fun refresh() = loadClients()
 }

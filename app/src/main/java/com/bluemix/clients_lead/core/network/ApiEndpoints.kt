@@ -19,8 +19,9 @@ object ApiEndpoints {
         const val SIGNUP = "/auth/signup"
         const val LOGIN = "/auth/login"
         const val PROFILE = "/auth/profile"
-        const val FORGOT_PASSWORD = "/auth/forgot-password"
-        const val RESET_PASSWORD = "/auth/reset-password"
+        //todo below
+        //const val FORGOT_PASSWORD = "/auth/forgot-password"
+        //const val RESET_PASSWORD = "/auth/reset-password"
     }
 
     /**
@@ -34,6 +35,11 @@ object ApiEndpoints {
         // Dynamic route for single client
         fun byId(clientId: String) = "$BASE/$clientId"
     }
+
+    object User {
+        const val CLEAR_PINCODE = "/auth/clear-pincode"
+    }
+
 
     /**
      * Location logs endpoints
@@ -51,6 +57,4 @@ object ApiEndpoints {
     }
 
 
-    const val SUBMIT_EXPENSE = "/api/expenses"
-    const val GET_EXPENSES = "/api/expenses"
 }

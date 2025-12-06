@@ -5,16 +5,20 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import android.content.Context
+import com.bluemix.clients_lead.features.location.isTrackingServiceRunning
 import kotlinx.coroutines.launch
 import com.bluemix.clients_lead.core.common.utils.AppResult
 import com.bluemix.clients_lead.domain.model.UserProfile
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
 import com.bluemix.clients_lead.domain.usecases.GetLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.GetUserProfile
+import kotlinx.coroutines.flow.update
 import com.bluemix.clients_lead.domain.usecases.SaveLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.SignOut
 import com.bluemix.clients_lead.features.location.LocationTrackingManager
 import timber.log.Timber
+import kotlinx.coroutines.flow.update
 
 data class ProfileUiState(
     val isLoading: Boolean = false,
@@ -34,6 +38,10 @@ class ProfileViewModel(
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    private val _trackingEnabled = MutableStateFlow(false)
+    val trackingEnabled = _trackingEnabled.asStateFlow()
+
 
     init {
         loadProfile()
@@ -113,6 +121,19 @@ class ProfileViewModel(
             }
         }
     }
+
+
+    fun syncTrackingState(context: Context) {
+        val running = isTrackingServiceRunning(context)
+        _trackingEnabled.value = running
+
+        _uiState.update { it.copy(isTrackingEnabled = running) } // <-- required
+    }
+
+
+
+
+
 
     fun refresh() {
         loadProfile()

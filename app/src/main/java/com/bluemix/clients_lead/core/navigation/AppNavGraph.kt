@@ -54,19 +54,16 @@ fun AppNavHost() {
         composable<Route.Gate> {
             SplashScreen(isReady = session.isReady)
 
-            LaunchedEffect(session.isReady) {
-                if (!session.isReady) return@LaunchedEffect
+            LaunchedEffect(session) {
+                if (!session.isReady) return@LaunchedEffect   // Wait until restore completed
 
-                // Small delay to ensure splash animation completes
-                delay(300)
-
-                // Navigate based on authentication status
                 if (session.isAuthenticated) {
                     navigationManager.navigateToMain()
                 } else {
                     navigationManager.navigateToAuth()
                 }
             }
+
         }
 
         // -------- Authentication --------
@@ -145,6 +142,8 @@ fun AppNavHost() {
             }
         }
 
+
+
         // -------- Detail Screen (No Bottom Bar) --------
         composable<Route.ClientDetail> { backStack ->
             val args = backStack.toRoute<Route.ClientDetail>()
@@ -159,6 +158,8 @@ fun AppNavHost() {
                 )
             }
         }
+
+
     }
 }
 

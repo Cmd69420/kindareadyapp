@@ -31,6 +31,8 @@ val authModule = module {
     factory { SendMagicLink(get()) }
     factory { HandleAuthRedirect(get()) }
     factory { IsLoggedIn(get()) }
+    factory { IsLoggedIn(get()) }
+    factory { ObserveAuthState(get()) }
     factory { SignOut(get()) }
     factory { GetCurrentUserId(get()) }  // ✅ Fixed naming
     factory { ObserveAuthState(get()) }
