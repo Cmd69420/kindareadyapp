@@ -1,6 +1,5 @@
 package com.bluemix.clients_lead.features.settings.vm
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bluemix.clients_lead.core.common.utils.AppResult
@@ -10,11 +9,11 @@ import com.bluemix.clients_lead.domain.usecases.GetLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.GetUserProfile
 import com.bluemix.clients_lead.domain.usecases.SaveLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.SignOut
-import com.bluemix.clients_lead.features.location.LocationTrackingManager
-import com.bluemix.clients_lead.features.location.isTrackingServiceRunning
+import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -32,7 +31,7 @@ class ProfileViewModel(
     private val getLocationTrackingPreference: GetLocationTrackingPreference,
     private val saveLocationTrackingPreference: SaveLocationTrackingPreference,
     private val signOut: SignOut,
-    private val locationTrackingManager: LocationTrackingManager
+    private val trackingStateManager: LocationTrackingStateManager     // << changed
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -40,7 +39,19 @@ class ProfileViewModel(
 
     init {
         loadProfile()
-        loadTrackingState()
+        observeTrackingState()
+    }
+
+    /** Keeps UI toggle in sync with the REAL foreground service state */
+    private fun observeTrackingState() {
+        viewModelScope.launch {
+            // initialize state once
+            trackingStateManager.updateTrackingState()
+            // automatically track service state forever
+            trackingStateManager.trackingState.collectLatest { enabled ->
+                _uiState.update { it.copy(isTrackingEnabled = enabled) }
+            }
+        }
     }
 
     private fun loadProfile() {
@@ -54,66 +65,41 @@ class ProfileViewModel(
             }
 
             when (val result = getUserProfile(userId)) {
-                is AppResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, profile = result.data) }
+                is AppResult.Success -> _uiState.update {
+                    it.copy(isLoading = false, profile = result.data)
                 }
-                is AppResult.Error -> {
-                    Timber.e(result.error.cause, "Failed to load profile")
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = result.error.message ?: "Failed to load profile"
-                        )
-                    }
+                is AppResult.Error -> _uiState.update {
+                    it.copy(isLoading = false, error = result.error.message ?: "Failed to load profile")
                 }
             }
         }
     }
 
-    private fun loadTrackingState() {
-        viewModelScope.launch {
-            val pref = getLocationTrackingPreference()
-            _uiState.update { it.copy(isTrackingEnabled = pref.isEnabled) }
-        }
-    }
-
+    /** Called when user toggles switch */
     fun toggleLocationTracking(enabled: Boolean) {
         viewModelScope.launch {
-            // save preference
-            saveLocationTrackingPreference(enabled)
-            _uiState.update { it.copy(isTrackingEnabled = enabled) }
+            saveLocationTrackingPreference(enabled) // keep storing preference
 
-            // only start/stop service — NO logout logic here
             if (enabled) {
-                Timber.d("Starting tracking from Profile screen")
-                locationTrackingManager.startTracking()
+                Timber.d("Starting tracking from Profile")
+                trackingStateManager.startTracking()
             } else {
-                Timber.d("Stopping tracking from Profile screen")
-                locationTrackingManager.stopTracking()
+                Timber.d("Stopping tracking from Profile")
+                trackingStateManager.stopTracking()
             }
+            // DO NOT manually update uiState here — it now auto-updates from Flow
         }
-    }
-
-    // keeps UI toggle in sync with real service state
-    fun syncTrackingState(context: Context) {
-        val running = isTrackingServiceRunning(context)
-        _uiState.update { it.copy(isTrackingEnabled = running) }
     }
 
     fun handleSignOut(onSuccess: () -> Unit) {
         viewModelScope.launch {
-            // stop tracking ONLY during sign-out
             if (_uiState.value.isTrackingEnabled) {
-                toggleLocationTracking(false)
+                trackingStateManager.stopTracking()   // safe stop on logout
             }
-
             when (val result = signOut()) {
                 is AppResult.Success -> onSuccess()
-                is AppResult.Error -> {
-                    Timber.e(result.error.cause, "Sign out failed")
-                    _uiState.update {
-                        it.copy(error = result.error.message ?: "Failed to sign out")
-                    }
+                is AppResult.Error -> _uiState.update {
+                    it.copy(error = result.error.message ?: "Failed to sign out")
                 }
             }
         }

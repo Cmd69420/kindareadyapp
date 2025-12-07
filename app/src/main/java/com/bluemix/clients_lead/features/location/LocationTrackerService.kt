@@ -70,8 +70,24 @@ class LocationTrackerService : Service() {
     private var latestLocation: Location? = null
     private var lastSavedTime = System.currentTimeMillis()
 
+
     // Configuration
     private val saveInterval = 1 * 60 * 1000L // 5 minutes (configurable)
+
+
+
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            Action.START.name -> {
+                val userId = sessionManager.getCurrentUserId()
+                if (userId != null) start(userId)
+            }
+            Action.STOP.name -> stop()
+        }
+        return START_STICKY
+    }
+
 
     override fun onBind(intent: Intent?): IBinder {
         return LocationBinder()
@@ -81,27 +97,6 @@ class LocationTrackerService : Service() {
         fun getService(): LocationTrackerService = this@LocationTrackerService
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            Action.START.name -> {
-                // Check authentication before starting
-                scope.launch {
-                    val userId = sessionManager.getCurrentUserId()
-                    if (userId != null) {
-                        start(userId)
-                    } else {
-                        Timber.e("Cannot start location tracking: User not authenticated")
-                        stopSelf()
-                    }
-                }
-
-            }
-
-            Action.STOP.name -> stop()
-        }
-        // Don't restart service if killed by system
-        return START_NOT_STICKY
-    }
 
     private fun start(userId: String) {
         // Prevent duplicate start
