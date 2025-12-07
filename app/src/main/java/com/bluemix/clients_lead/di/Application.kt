@@ -19,7 +19,14 @@ class App : Application() {
         startKoin {
             androidLogger(Level.ERROR)
             androidContext(this@App)
-            modules(appModule,authModule,clientModule,locationModule,profileModule)
+            modules(
+                appModule,
+                authModule,
+                clientModule,
+                locationModule,
+                profileModule,
+                expenseModule  // ← Added this
+            )
         }
 
         createNotificationChannels()

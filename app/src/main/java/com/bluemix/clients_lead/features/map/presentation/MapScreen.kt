@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Error
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
+import com.bluemix.clients_lead.features.expense.presentation.TripExpenseSheet
 import com.bluemix.clients_lead.features.map.vm.MapViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -87,6 +89,7 @@ fun MapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var isRefreshing by remember { mutableStateOf(false) }
+    var showExpenseSheet by remember { mutableStateOf(false) }
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(DefaultLocation, 12f)
     }
@@ -123,259 +126,284 @@ fun MapScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.background(AppTheme.colors.background),
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            TopBar(
-                colors = TopBarDefaults.topBarColors(
-                    containerColor = AppTheme.colors.background,
-                    scrolledContainerColor = AppTheme.colors.surface
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.background(AppTheme.colors.background),
+            contentWindowInsets = WindowInsets(0),
+            topBar = {
+                TopBar(
+                    colors = TopBarDefaults.topBarColors(
+                        containerColor = AppTheme.colors.background,
+                        scrolledContainerColor = AppTheme.colors.surface
+                    )
                 ) {
-                    Text(
-                        text = "Map",
-                        style = AppTheme.typography.h2,
-                        color = AppTheme.colors.text
-                    )
-
-                    val rotation by animateFloatAsState(
-                        targetValue = if (isRefreshing) 360f else 0f,
-                        animationSpec = tween(600),
-                        finishedListener = { isRefreshing = false },
-                        label = "refreshRotation"
-                    )
-
-                    IconButton(
-                        onClick = {
-                            isRefreshing = true
-                            viewModel.refresh()
-                        }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = AppTheme.colors.text,
-                            modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                        Text(
+                            text = "Map",
+                            style = AppTheme.typography.h2,
+                            color = AppTheme.colors.text
                         )
-                    }
-                }
-            }
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-                properties = MapProperties(
-                    isMyLocationEnabled = locationPermissions.permissions.any { it.status.isGranted },
-                    mapType = MapType.NORMAL
-                ),
-                uiSettings = MapUiSettings(
-                    zoomControlsEnabled = false,
-                    myLocationButtonEnabled = true,
-                    compassEnabled = true,
-                    mapToolbarEnabled = false
-                )
-            ) {
-                // Security: only render markers when tracking is enabled
-                if (uiState.isTrackingEnabled) {
-                    uiState.clients.forEach { client ->
-                        if (client.latitude != null && client.longitude != null) {
-                            val position = LatLng(client.latitude, client.longitude)
 
-                            Marker(
-                                state = MarkerState(position = position),
-                                title = client.name,
-                                snippet = client.address ?: "No address",
-                                icon = BitmapDescriptorFactory.defaultMarker(
-                                    when (client.status) {
-                                        "active" -> BitmapDescriptorFactory.HUE_GREEN
-                                        "inactive" -> BitmapDescriptorFactory.HUE_AZURE
-                                        "completed" -> BitmapDescriptorFactory.HUE_BLUE
-                                        else -> BitmapDescriptorFactory.HUE_RED
-                                    }
-                                ),
-                                onClick = {
-                                    viewModel.selectClient(client)
-                                    true
-                                }
+                        val rotation by animateFloatAsState(
+                            targetValue = if (isRefreshing) 360f else 0f,
+                            animationSpec = tween(600),
+                            finishedListener = { isRefreshing = false },
+                            label = "refreshRotation"
+                        )
+
+                        IconButton(
+                            onClick = {
+                                isRefreshing = true
+                                viewModel.refresh()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = AppTheme.colors.text,
+                                modifier = Modifier.graphicsLayer { rotationZ = rotation }
                             )
                         }
                     }
                 }
             }
-
-            // Animated Error Banner
-            AnimatedVisibility(
-                visible = uiState.error != null,
-                modifier = Modifier.align(Alignment.TopCenter),
-                enter = slideInVertically() + fadeIn(),
-                exit = slideOutVertically() + fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(AppTheme.colors.error)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = null,
-                            tint = AppTheme.colors.onError,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = uiState.error ?: "Unknown error",
-                            style = AppTheme.typography.body2,
-                            color = AppTheme.colors.onError
-                        )
-                    }
-                }
-            }
-
-            // Animated Loading Card
-            AnimatedVisibility(
-                visible = uiState.isLoading,
-                modifier = Modifier.align(Alignment.Center),
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(AppTheme.colors.surface)
-                        .padding(24.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = AppTheme.colors.primary
-                        )
-                        Text(
-                            text = "Loading clients...",
-                            style = AppTheme.typography.body1,
-                            color = AppTheme.colors.text
-                        )
-                    }
-                }
-            }
-
-            // "Clocked-In" badge
-            AnimatedVisibility(
-                visible = uiState.userClockedIn && uiState.isTrackingEnabled,
+        ) { paddingValues ->
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 70.dp, start = 16.dp),
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(AppTheme.colors.success.copy(alpha = 0.15f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "Clocked-In",
-                        style = AppTheme.typography.label2,
-                        color = AppTheme.colors.success
-                    )
-                }
-            }
-
-            // Small "Tracking Active" indicator (top-right)
-            AnimatedVisibility(
-                visible = uiState.isTrackingEnabled,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 70.dp, end = 16.dp),
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(AppTheme.colors.primary.copy(alpha = 0.12f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = AppTheme.colors.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Tracking Active",
-                            style = AppTheme.typography.label2,
-                            color = AppTheme.colors.primary
-                        )
-                    }
-                }
-            }
-
-            // Bottom Sheet for selected client (only when tracking enabled)
-            AnimatedVisibility(
-                visible = uiState.selectedClient != null && uiState.isTrackingEnabled,
-                modifier = Modifier.align(Alignment.BottomCenter),
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                uiState.selectedClient?.let { client ->
-                    AnimatedClientBottomSheet(
-                        client = client,
-                        cameraPositionState = cameraPositionState,
-                        onClose = { viewModel.selectClient(null) },
-                        onViewDetails = { onNavigateToClientDetail(client.id) }
-                    )
-                }
-            }
-
-            // Permission Prompt (still shown if permissions missing)
-            AnimatedVisibility(
-                visible = !locationPermissions.allPermissionsGranted,
-                modifier = Modifier.align(Alignment.BottomCenter),
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                AnimatedPermissionPrompt(
-                    onGrant = { locationPermissions.launchMultiplePermissionRequest() }
-                )
-            }
-
-            // =========================
-            // Full-screen Tracking Warning
-            // =========================
-            if (!uiState.isTrackingEnabled) {
-                TrackingRequiredOverlay(
+                GoogleMap(
                     modifier = Modifier.fillMaxSize(),
-                    onEnableTracking = { viewModel.enableTracking() },
-                    onRefreshStatus = { viewModel.refreshTrackingState() }
-                )
+                    cameraPositionState = cameraPositionState,
+                    properties = MapProperties(
+                        isMyLocationEnabled = locationPermissions.permissions.any { it.status.isGranted },
+                        mapType = MapType.NORMAL
+                    ),
+                    uiSettings = MapUiSettings(
+                        zoomControlsEnabled = false,
+                        myLocationButtonEnabled = true,
+                        compassEnabled = true,
+                        mapToolbarEnabled = false
+                    )
+                ) {
+                    // Security: only render markers when tracking is enabled
+                    if (uiState.isTrackingEnabled) {
+                        uiState.clients.forEach { client ->
+                            if (client.latitude != null && client.longitude != null) {
+                                val position = LatLng(client.latitude, client.longitude)
+
+                                Marker(
+                                    state = MarkerState(position = position),
+                                    title = client.name,
+                                    snippet = client.address ?: "No address",
+                                    icon = BitmapDescriptorFactory.defaultMarker(
+                                        when (client.status) {
+                                            "active" -> BitmapDescriptorFactory.HUE_GREEN
+                                            "inactive" -> BitmapDescriptorFactory.HUE_AZURE
+                                            "completed" -> BitmapDescriptorFactory.HUE_BLUE
+                                            else -> BitmapDescriptorFactory.HUE_RED
+                                        }
+                                    ),
+                                    onClick = {
+                                        viewModel.selectClient(client)
+                                        true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Animated Error Banner
+                AnimatedVisibility(
+                    visible = uiState.error != null,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    enter = slideInVertically() + fadeIn(),
+                    exit = slideOutVertically() + fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AppTheme.colors.error)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = AppTheme.colors.onError,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = uiState.error ?: "Unknown error",
+                                style = AppTheme.typography.body2,
+                                color = AppTheme.colors.onError
+                            )
+                        }
+                    }
+                }
+
+                // Animated Loading Card
+                AnimatedVisibility(
+                    visible = uiState.isLoading,
+                    modifier = Modifier.align(Alignment.Center),
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(AppTheme.colors.surface)
+                            .padding(24.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = AppTheme.colors.primary
+                            )
+                            Text(
+                                text = "Loading clients...",
+                                style = AppTheme.typography.body1,
+                                color = AppTheme.colors.text
+                            )
+                        }
+                    }
+                }
+
+                // "Clocked-In" badge
+                AnimatedVisibility(
+                    visible = uiState.userClockedIn && uiState.isTrackingEnabled,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 70.dp, start = 16.dp),
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(AppTheme.colors.success.copy(alpha = 0.15f))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Clocked-In",
+                            style = AppTheme.typography.label2,
+                            color = AppTheme.colors.success
+                        )
+                    }
+                }
+
+                // Small "Tracking Active" indicator (top-right)
+                AnimatedVisibility(
+                    visible = uiState.isTrackingEnabled,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 70.dp, end = 16.dp),
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(AppTheme.colors.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = AppTheme.colors.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Tracking Active",
+                                style = AppTheme.typography.label2,
+                                color = AppTheme.colors.primary
+                            )
+                        }
+                    }
+                }
+
+                // Floating Action Button (bottom-right)
+                AnimatedVisibility(
+                    visible = uiState.isTrackingEnabled,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 16.dp, end = 16.dp),
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut()
+                ) {
+                    ui.components.FloatingActionButton(
+                        onClick = { showExpenseSheet = true },
+                        icon = Icons.Default.Add,
+                        contentDescription = "Add Trip Expense"
+                    )
+                }
+
+                // Bottom Sheet for selected client (only when tracking enabled)
+                AnimatedVisibility(
+                    visible = uiState.selectedClient != null && uiState.isTrackingEnabled,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    uiState.selectedClient?.let { client ->
+                        AnimatedClientBottomSheet(
+                            client = client,
+                            cameraPositionState = cameraPositionState,
+                            onClose = { viewModel.selectClient(null) },
+                            onViewDetails = { onNavigateToClientDetail(client.id) }
+                        )
+                    }
+                }
+
+                // Permission Prompt (still shown if permissions missing)
+                AnimatedVisibility(
+                    visible = !locationPermissions.allPermissionsGranted,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    AnimatedPermissionPrompt(
+                        onGrant = { locationPermissions.launchMultiplePermissionRequest() }
+                    )
+                }
+
+                // =========================
+                // Full-screen Tracking Warning
+                // =========================
+                if (!uiState.isTrackingEnabled) {
+                    TrackingRequiredOverlay(
+                        modifier = Modifier.fillMaxSize(),
+                        onEnableTracking = { viewModel.enableTracking() },
+                        onRefreshStatus = { viewModel.refreshTrackingState() }
+                    )
+                }
             }
+        }
+
+        // Expense Sheet Modal
+        if (showExpenseSheet) {
+            TripExpenseSheet(
+                onDismiss = { showExpenseSheet = false }
+            )
         }
     }
 }
@@ -561,7 +589,7 @@ private fun AnimatedClientBottomSheet(
 
                 Button(
                     onClick = {
-                        // Center map on this client’s location
+                        // Center map on this client's location
                         if (client.latitude != null && client.longitude != null) {
                             cameraPositionState.move(
                                 CameraUpdateFactory.newLatLngZoom(

@@ -106,6 +106,13 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
+
+    // Material Icons Extended (if not included)
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
+
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.4.0")
+
     val ktorVersion = "2.3.7"
     implementation("io.ktor:ktor-client-core:$ktorVersion")
     implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
