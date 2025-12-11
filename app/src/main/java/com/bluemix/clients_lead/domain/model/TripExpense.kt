@@ -12,6 +12,8 @@ data class TripExpense(
     val currency: String = "₹",
     val notes: String?,
     val receiptUrls: List<String> = emptyList(),
+    val clientId: String? = null,
+    val clientName: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

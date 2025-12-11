@@ -1,6 +1,7 @@
 package com.bluemix.clients_lead.features.expense.presentation
 
 import android.net.Uri
+import timber.log.Timber
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.bluemix.clients_lead.domain.model.TransportMode
 import com.bluemix.clients_lead.features.expense.vm.TripExpenseViewModel
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
 import ui.components.Button
@@ -46,11 +48,23 @@ fun TripExpenseSheet(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    var showAddUrlDialog by remember { mutableStateOf(false) }
+    var receiptUrlInput by remember { mutableStateOf("") }
+
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { viewModel.addReceipt(it.toString()) }
+    }
+
+    // Show success and close
+    LaunchedEffect(uiState.successMessage) {
+        if (uiState.successMessage != null) {
+            delay(500) // Brief delay to show success
+            onDismiss()
+            viewModel.resetSuccess()
+        }
     }
 
     AnimatedVisibility(
@@ -85,15 +99,27 @@ fun TripExpenseSheet(
                     color = AppTheme.colors.text
                 )
 
-                TextButton(onClick = {
-                    viewModel.submitExpense()
-                    onDismiss()
-                }) {
-                    Text(
-                        text = "Save",
-                        style = AppTheme.typography.button,
-                        color = AppTheme.colors.primary
-                    )
+                TextButton(
+                    onClick = {
+                        Timber.d("SAVE BUTTON PRESSED")
+                        viewModel.submitExpense(onSuccess = { onDismiss() })
+                    },
+
+                    enabled = !uiState.isSubmitting
+                ) {
+                    if (uiState.isSubmitting) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = AppTheme.colors.primary
+                        )
+                    } else {
+                        Text(
+                            text = "Save",
+                            style = AppTheme.typography.button,
+                            color = AppTheme.colors.primary
+                        )
+                    }
                 }
             }
 
@@ -106,6 +132,34 @@ fun TripExpenseSheet(
                     .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                // Error Message
+                if (uiState.error != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(AppTheme.colors.error.copy(alpha = 0.1f))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = AppTheme.colors.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = uiState.error?:"",
+                                style = AppTheme.typography.body2,
+                                color = AppTheme.colors.error
+                            )
+                        }
+                    }
+                }
+
                 // Trip Information Section
                 SectionHeader("Trip Information")
 
@@ -247,8 +301,9 @@ fun TripExpenseSheet(
 
                     if (uiState.receiptUrls.size < 5) {
                         AddReceiptButton(
-                            onClick = { imagePickerLauncher.launch("image/*") }
+                            onClick = { showAddUrlDialog = true }
                         )
+
                     }
                 }
 
@@ -289,16 +344,51 @@ fun TripExpenseSheet(
 
                 // Submit Button
                 Button(
-                    text = "Submit Expense",
+                    text = if (uiState.isSubmitting) "Submitting..." else "Submit Expense",
                     onClick = {
-                        viewModel.submitExpense()
-                        onDismiss()
+                        viewModel.submitExpense(onSuccess = { onDismiss() })
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    variant = ButtonVariant.Primary
+                    variant = ButtonVariant.Primary,
+                    enabled = !uiState.isSubmitting,
+                    loading = uiState.isSubmitting
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
+                if (showAddUrlDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showAddUrlDialog = false },
+                        title = { Text("Attach Receipt URL") },
+                        text = {
+                            OutlinedTextField(
+                                value = receiptUrlInput,
+                                onValueChange = { receiptUrlInput = it },
+                                placeholder = { Text("https://example.com/receipt.jpg") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val url = receiptUrlInput.trim()
+                                if (url.startsWith("http://") || url.startsWith("https://")) {
+                                    viewModel.addReceipt(url)
+                                } else {
+                                    viewModel.updateNotes("Invalid image URL")
+                                }
+                                receiptUrlInput = ""
+                                showAddUrlDialog = false
+                            }) {
+                                Text("Add")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showAddUrlDialog = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
+
             }
         }
     }
@@ -429,6 +519,9 @@ private fun AddReceiptButton(onClick: () -> Unit) {
             )
         }
     }
+
+
+
 }
 
 private fun formatDate(timestamp: Long): String {

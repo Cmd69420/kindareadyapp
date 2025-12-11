@@ -27,6 +27,16 @@ val profileModule = module {
     factory { GetLocationTrackingPreference(get()) }
     factory { SaveLocationTrackingPreference(get()) }
 
-    // ViewModel
-    viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get()) }
+    // ViewModel - Added GetTotalExpenseUseCase as 7th parameter
+    viewModel {
+        ProfileViewModel(
+            getUserProfile = get(),
+            getCurrentUserId = get(),
+            getLocationTrackingPreference = get(),
+            saveLocationTrackingPreference = get(),
+            signOut = get(),
+            trackingStateManager = get(),
+            getTotalExpense = get()
+        )
+    }
 }

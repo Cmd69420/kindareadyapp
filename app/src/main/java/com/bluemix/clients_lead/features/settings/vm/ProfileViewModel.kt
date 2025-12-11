@@ -6,6 +6,7 @@ import com.bluemix.clients_lead.core.common.utils.AppResult
 import com.bluemix.clients_lead.domain.model.UserProfile
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
 import com.bluemix.clients_lead.domain.usecases.GetLocationTrackingPreference
+import com.bluemix.clients_lead.domain.usecases.GetTotalExpenseUseCase
 import com.bluemix.clients_lead.domain.usecases.GetUserProfile
 import com.bluemix.clients_lead.domain.usecases.SaveLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.SignOut
@@ -22,7 +23,8 @@ data class ProfileUiState(
     val isLoading: Boolean = false,
     val profile: UserProfile? = null,
     val isTrackingEnabled: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val totalSpent: Double = 0.0
 )
 
 class ProfileViewModel(
@@ -31,7 +33,8 @@ class ProfileViewModel(
     private val getLocationTrackingPreference: GetLocationTrackingPreference,
     private val saveLocationTrackingPreference: SaveLocationTrackingPreference,
     private val signOut: SignOut,
-    private val trackingStateManager: LocationTrackingStateManager     // << changed
+    private val trackingStateManager: LocationTrackingStateManager,
+    private val getTotalExpense: GetTotalExpenseUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -65,11 +68,32 @@ class ProfileViewModel(
             }
 
             when (val result = getUserProfile(userId)) {
-                is AppResult.Success -> _uiState.update {
-                    it.copy(isLoading = false, profile = result.data)
+                is AppResult.Success -> {
+                    _uiState.update {
+                        it.copy(isLoading = false, profile = result.data)
+                    }
+                    // Load total expenses after profile loads successfully
+                    loadTotalExpense()
                 }
                 is AppResult.Error -> _uiState.update {
                     it.copy(isLoading = false, error = result.error.message ?: "Failed to load profile")
+                }
+            }
+        }
+    }
+
+    private fun loadTotalExpense() {
+        viewModelScope.launch {
+            Timber.d("Loading total expenses")
+
+            when (val result = getTotalExpense()) {
+                is AppResult.Success -> {
+                    _uiState.update { it.copy(totalSpent = result.data) }
+                    Timber.d("Total expenses loaded: ${result.data}")
+                }
+                is AppResult.Error -> {
+                    Timber.e("Failed to load total expenses: ${result.error.message}")
+                    // Don't show error to user, just log it
                 }
             }
         }
@@ -87,7 +111,7 @@ class ProfileViewModel(
                 Timber.d("Stopping tracking from Profile")
                 trackingStateManager.stopTracking()
             }
-            // DO NOT manually update uiState here — it now auto-updates from Flow
+            // DO NOT manually update uiState here – it now auto-updates from Flow
         }
     }
 
@@ -105,5 +129,8 @@ class ProfileViewModel(
         }
     }
 
-    fun refresh() = loadProfile()
+    fun refresh() {
+        loadProfile()
+        // loadTotalExpense() will be called automatically after loadProfile() succeeds
+    }
 }

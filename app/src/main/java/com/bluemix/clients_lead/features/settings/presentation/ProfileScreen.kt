@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bluemix.clients_lead.features.settings.vm.ProfileViewModel
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
@@ -237,6 +239,11 @@ private fun AnimatedProfileContent(
             userId = profile.userId
         )
 
+        // NEW: Total Expenses Card
+        AnimatedTotalExpenseCard(
+            totalSpent = uiState.totalSpent
+        )
+
         // Animated Settings Section
         AnimatedSection(title = "Settings", index = 1) {
             AnimatedTrackingToggle(
@@ -370,6 +377,85 @@ private fun AnimatedUserCard(fullName: String, userId: String) {
 
             // Animated ID Badge
             AnimatedIdBadge(userId = userId)
+        }
+    }
+}
+
+@Composable
+private fun AnimatedTotalExpenseCard(totalSpent: Double) {
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(250)
+        isVisible = true
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.85f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "expenseCardScale"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(500),
+        label = "expenseCardAlpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .graphicsLayer { this.alpha = alpha }
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        AppTheme.colors.success.copy(alpha = 0.15f),
+                        AppTheme.colors.primary.copy(alpha = 0.1f)
+                    )
+                )
+            )
+            .padding(24.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Total Expenses",
+                    style = AppTheme.typography.body2,
+                    color = AppTheme.colors.textSecondary
+                )
+                Text(
+                    text = "₹${String.format("%.2f", totalSpent)}",
+                    style = AppTheme.typography.h1.copy(fontSize = 32.sp),
+                    color = AppTheme.colors.text
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(AppTheme.colors.success.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountBalanceWallet,
+                    contentDescription = "Total Expenses",
+                    modifier = Modifier.size(32.dp),
+                    tint = AppTheme.colors.success
+                )
+            }
         }
     }
 }
