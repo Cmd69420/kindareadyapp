@@ -78,6 +78,8 @@ class MapViewModel(
         }
     }
 
+
+
     /**
      * Explicit refresh of tracking state from the system.
      * Can be triggered from UI (e.g., "Refresh status" button).

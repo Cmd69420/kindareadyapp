@@ -5,13 +5,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.animation.scaleIn
+import timber.log.Timber
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,6 +74,9 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.bluemix.clients_lead.features.meeting.presentation.MeetingBottomSheet
+import com.bluemix.clients_lead.features.meeting.utils.ProximityDetector
+import com.bluemix.clients_lead.features.meeting.vm.MeetingViewModel
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
 import ui.components.Scaffold
@@ -78,16 +84,21 @@ import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
 
-// Default location (Mumbai, India)
+// Default location (Mumbai, India) - Initial camera position before user location loads
 private val DefaultLocation = LatLng(19.0760, 72.8777)
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MapScreen(
     viewModel: MapViewModel = koinViewModel(),
+    meetingViewModel: MeetingViewModel = koinViewModel(),
     onNavigateToClientDetail: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val meetingUiState by meetingViewModel.uiState.collectAsState()
+    var showMeetingSheet by remember { mutableStateOf(false) }
+    var proximityClient by remember { mutableStateOf<Client?>(null) }
+    var lastProximityCheck by remember { mutableStateOf(0L) }
     var isRefreshing by remember { mutableStateOf(false) }
     var showExpenseSheet by remember { mutableStateOf(false) }
     val cameraPositionState = rememberCameraPositionState {
@@ -105,7 +116,6 @@ fun MapScreen(
         if (!locationPermissions.allPermissionsGranted) {
             locationPermissions.launchMultiplePermissionRequest()
         } else {
-            // If permissions are already granted, ensure tracking state is synced
             viewModel.refreshTrackingState()
         }
     }
@@ -122,6 +132,32 @@ fun MapScreen(
                         12f
                     )
                 )
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.currentLocation, uiState.clients) {
+        if (uiState.currentLocation != null && uiState.clients.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            if (now - lastProximityCheck > 10000) {
+                lastProximityCheck = now
+
+                uiState.clients.forEach { client ->
+                    val isNewEntry = ProximityDetector.detectProximityEntry(
+                        currentLocation = uiState.currentLocation!!,
+                        client = client,
+                        radiusMeters = 100.0,
+                        cooldownMillis = 300000
+                    )
+
+                    if (isNewEntry) {
+                        Timber.d("User entered proximity of client: ${client.name}")
+                        viewModel.selectClient(null) // Close any open client sheet
+                        proximityClient = client
+                        showMeetingSheet = true
+                        meetingViewModel.checkActiveMeeting(client.id)
+                    }
+                }
             }
         }
     }
@@ -193,7 +229,6 @@ fun MapScreen(
                         mapToolbarEnabled = false
                     )
                 ) {
-                    // Security: only render markers when tracking is enabled
                     if (uiState.isTrackingEnabled) {
                         uiState.clients.forEach { client ->
                             if (client.latitude != null && client.longitude != null) {
@@ -221,7 +256,68 @@ fun MapScreen(
                     }
                 }
 
-                // Animated Error Banner
+                // Meeting Bottom Sheet - Highest priority (z-index 2)
+                AnimatedVisibility(
+                    visible = showMeetingSheet && proximityClient != null && uiState.isTrackingEnabled,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(2f),
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    proximityClient?.let { client ->
+                        MeetingBottomSheet(
+                            client = client,
+                            activeMeeting = meetingUiState.activeMeeting,
+                            isLoading = meetingUiState.isLoading,
+                            onStartMeeting = {
+                                meetingViewModel.startMeeting(
+                                    clientId = client.id,
+                                    latitude = uiState.currentLocation?.latitude,
+                                    longitude = uiState.currentLocation?.longitude,
+                                    accuracy = null
+                                )
+                            },
+                            onEndMeeting = { comments, attachments ->
+                                meetingViewModel.endMeeting(comments, attachments)
+                                showMeetingSheet = false
+                                proximityClient = null
+                                ProximityDetector.resetProximityState(client.id)
+                            },
+                            onDismiss = {
+                                showMeetingSheet = false
+                                proximityClient = null
+                            }
+                        )
+                    }
+                }
+
+                // Client Bottom Sheet - Only shown when meeting sheet is NOT showing
+                AnimatedVisibility(
+                    visible = uiState.selectedClient != null && uiState.isTrackingEnabled && !showMeetingSheet,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(1f),
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    uiState.selectedClient?.let { client ->
+                        AnimatedClientBottomSheet(
+                            client = client,
+                            cameraPositionState = cameraPositionState,
+                            onClose = { viewModel.selectClient(null) },
+                            onViewDetails = { onNavigateToClientDetail(client.id) },
+                            onStartMeeting = {
+                                viewModel.selectClient(null)
+                                proximityClient = client
+                                showMeetingSheet = true
+                                meetingViewModel.checkActiveMeeting(client.id)
+                            }
+                        )
+                    }
+                }
+
+                // Error Banner
                 AnimatedVisibility(
                     visible = uiState.error != null,
                     modifier = Modifier.align(Alignment.TopCenter),
@@ -254,7 +350,7 @@ fun MapScreen(
                     }
                 }
 
-                // Animated Loading Card
+                // Loading Card
                 AnimatedVisibility(
                     visible = uiState.isLoading,
                     modifier = Modifier.align(Alignment.Center),
@@ -307,7 +403,7 @@ fun MapScreen(
                     }
                 }
 
-                // Small "Tracking Active" indicator (top-right)
+                // "Tracking Active" indicator
                 AnimatedVisibility(
                     visible = uiState.isTrackingEnabled,
                     modifier = Modifier
@@ -341,7 +437,7 @@ fun MapScreen(
                     }
                 }
 
-                // Floating Action Button (bottom-right)
+                // Floating Action Button
                 AnimatedVisibility(
                     visible = uiState.isTrackingEnabled,
                     modifier = Modifier
@@ -357,24 +453,7 @@ fun MapScreen(
                     )
                 }
 
-                // Bottom Sheet for selected client (only when tracking enabled)
-                AnimatedVisibility(
-                    visible = uiState.selectedClient != null && uiState.isTrackingEnabled,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-                ) {
-                    uiState.selectedClient?.let { client ->
-                        AnimatedClientBottomSheet(
-                            client = client,
-                            cameraPositionState = cameraPositionState,
-                            onClose = { viewModel.selectClient(null) },
-                            onViewDetails = { onNavigateToClientDetail(client.id) }
-                        )
-                    }
-                }
-
-                // Permission Prompt (still shown if permissions missing)
+                // Permission Prompt
                 AnimatedVisibility(
                     visible = !locationPermissions.allPermissionsGranted,
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -386,9 +465,7 @@ fun MapScreen(
                     )
                 }
 
-                // =========================
                 // Full-screen Tracking Warning
-                // =========================
                 if (!uiState.isTrackingEnabled) {
                     TrackingRequiredOverlay(
                         modifier = Modifier.fillMaxSize(),
@@ -406,6 +483,13 @@ fun MapScreen(
             )
         }
     }
+
+    LaunchedEffect(meetingUiState.error) {
+        meetingUiState.error?.let { error ->
+            Timber.e("Meeting error: $error")
+            meetingViewModel.clearError()
+        }
+    }
 }
 
 @Composable
@@ -416,7 +500,6 @@ private fun TrackingRequiredOverlay(
 ) {
     Box(
         modifier = modifier
-            // 95% opacity overlay to block map visibility
             .background(AppTheme.colors.background.copy(alpha = 0.95f))
     ) {
         Column(
@@ -517,16 +600,13 @@ private fun TrackingBenefitItem(text: String) {
     }
 }
 
-/**
- * Simple animated bottom sheet for a selected client.
- * Only used when tracking is enabled.
- */
 @Composable
 private fun AnimatedClientBottomSheet(
     client: Client,
     cameraPositionState: CameraPositionState,
     onClose: () -> Unit,
-    onViewDetails: () -> Unit
+    onViewDetails: () -> Unit,
+    onStartMeeting: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -537,7 +617,7 @@ private fun AnimatedClientBottomSheet(
             .padding(16.dp)
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -553,7 +633,7 @@ private fun AnimatedClientBottomSheet(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close",
-                        tint = AppTheme.colors.text
+                        tint = AppTheme.colors.textSecondary
                     )
                 }
             }
@@ -566,60 +646,77 @@ private fun AnimatedClientBottomSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = onViewDetails,
-                    modifier = Modifier.weight(1f)
+                    onClick = onStartMeeting,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = Icons.Default.EventNote,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "View Details",
+                        text = "Start Meeting",
                         style = AppTheme.typography.button
                     )
                 }
 
-                Button(
-                    onClick = {
-                        // Center map on this client's location
-                        if (client.latitude != null && client.longitude != null) {
-                            cameraPositionState.move(
-                                CameraUpdateFactory.newLatLngZoom(
-                                    LatLng(client.latitude, client.longitude),
-                                    16f
-                                )
-                            )
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Directions,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Focus on Map",
-                        style = AppTheme.typography.button
-                    )
+                    OutlinedButton(
+                        onClick = onViewDetails,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Details",
+                            style = AppTheme.typography.button
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (client.latitude != null && client.longitude != null) {
+                                cameraPositionState.move(
+                                    CameraUpdateFactory.newLatLngZoom(
+                                        LatLng(client.latitude, client.longitude),
+                                        16f
+                                    )
+                                )
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Directions,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Focus",
+                            style = AppTheme.typography.button
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/**
- * Simple permission prompt shown at the bottom when location permissions are missing.
- */
 @Composable
 private fun AnimatedPermissionPrompt(
     onGrant: () -> Unit

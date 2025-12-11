@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import com.bluemix.clients_lead.features.location.LocationTrackerService
+import com.bluemix.clients_lead.di.meetingModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -25,7 +26,8 @@ class App : Application() {
                 clientModule,
                 locationModule,
                 profileModule,
-                expenseModule  // ← Added this
+                expenseModule,
+                meetingModule// ← Added this
             )
         }
 
@@ -55,6 +57,25 @@ class App : Application() {
 
             // Add more channels here if needed in the future
             // notificationManager.createNotificationChannel(otherChannel)
+        }
+    }
+}
+
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+
+        startKoin {
+            androidContext(this@MyApplication)
+            modules(
+                appModule,
+                authModule,
+                clientModule,
+                expenseModule,
+                locationModule,
+                profileModule,
+                meetingModule  // ADD THIS
+            )
         }
     }
 }
