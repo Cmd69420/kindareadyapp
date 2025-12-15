@@ -14,7 +14,7 @@ import kotlin.math.sqrt
 object ProximityDetector {
 
     // Default proximity radius in meters
-    const val DEFAULT_PROXIMITY_RADIUS_METERS = 100.0
+    const val DEFAULT_PROXIMITY_RADIUS_METERS = 1.0
 
     /**
      * Check if current location is within proximity of a client

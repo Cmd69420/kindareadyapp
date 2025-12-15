@@ -29,7 +29,7 @@ class StartMeeting(
 }
 
 /**
- * End an ongoing meeting
+ * End an ongoing meeting with location capture
  */
 class EndMeeting(
     private val repository: IMeetingRepository
@@ -37,12 +37,18 @@ class EndMeeting(
     suspend operator fun invoke(
         meetingId: String,
         comments: String?,
-        attachments: List<String>?
+        attachments: List<String>?,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        accuracy: Double? = null
     ): AppResult<Meeting> {
         val request = UpdateMeetingRequest(
             status = "COMPLETED",
             comments = comments,
-            attachments = attachments
+            attachments = attachments,
+            latitude = latitude,
+            longitude = longitude,
+            accuracy = accuracy
         )
         return repository.endMeeting(meetingId, request)
     }

@@ -102,7 +102,7 @@ fun MapScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var showExpenseSheet by remember { mutableStateOf(false) }
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(DefaultLocation, 12f)
+        position = CameraPosition.fromLatLngZoom(DefaultLocation, 16f)
     }
 
     val locationPermissions = rememberMultiplePermissionsState(
@@ -129,7 +129,7 @@ fun MapScreen(
                 cameraPositionState.animate(
                     CameraUpdateFactory.newLatLngZoom(
                         LatLng(client.latitude!!, client.longitude!!),
-                        12f
+                        16f
                     )
                 )
             }

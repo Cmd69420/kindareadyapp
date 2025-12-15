@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.bluemix.clients_lead.core.common.utils.AppResult
 import com.bluemix.clients_lead.domain.model.Meeting
 import com.bluemix.clients_lead.domain.usecases.*
+import com.bluemix.clients_lead.features.location.LocationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +34,8 @@ class MeetingViewModel(
 
     private val _uiState = MutableStateFlow(MeetingUiState())
     val uiState: StateFlow<MeetingUiState> = _uiState.asStateFlow()
+
+    private val locationManager = LocationManager(context)
 
     /**
      * Check if there's an active meeting for a client
@@ -93,7 +96,7 @@ class MeetingViewModel(
     }
 
     /**
-     * End the current meeting
+     * End the current meeting with location capture
      */
     fun endMeeting(
         comments: String?,
@@ -109,6 +112,25 @@ class MeetingViewModel(
             }
 
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+            // Get current location for end location
+            var endLatitude: Double? = null
+            var endLongitude: Double? = null
+            var endAccuracy: Double? = null
+
+            try {
+                val location = locationManager.getLastKnownLocation()
+                if (location != null) {
+                    endLatitude = location.latitude
+                    endLongitude = location.longitude
+                    endAccuracy = location.accuracy.toDouble()
+                    Timber.d("📍 End location captured: $endLatitude, $endLongitude")
+                } else {
+                    Timber.w("⚠️ No location available when ending meeting")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get end location")
+            }
 
             // Upload attachments first if any
             val uploadedUrls = mutableListOf<String>()
@@ -135,8 +157,15 @@ class MeetingViewModel(
                 )
             }
 
-            // End the meeting with comments and uploaded attachment URLs
-            when (val result = endMeeting.invoke(meeting.id, comments, uploadedUrls.ifEmpty { null })) {
+            // End the meeting with comments, attachments, and location
+            when (val result = endMeeting.invoke(
+                meetingId = meeting.id,
+                comments = comments,
+                attachments = uploadedUrls.ifEmpty { null },
+                latitude = endLatitude,
+                longitude = endLongitude,
+                accuracy = endAccuracy
+            )) {
                 is AppResult.Success -> {
                     Timber.d("Meeting ended successfully: ${result.data.id}")
                     _uiState.value = _uiState.value.copy(
@@ -186,6 +215,7 @@ class MeetingViewModel(
             )
         }
     }
+
     /**
      * Clear any error messages
      */

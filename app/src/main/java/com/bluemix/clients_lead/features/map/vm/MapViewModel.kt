@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bluemix.clients_lead.core.common.utils.AppResult
 import com.bluemix.clients_lead.domain.model.Client
+import com.bluemix.clients_lead.domain.model.LocationLog
 import com.bluemix.clients_lead.domain.usecases.GetClientsWithLocation
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
 import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
@@ -18,9 +19,10 @@ data class MapUiState(
     val isLoading: Boolean = false,
     val clients: List<Client> = emptyList(),
     val currentLocation: LatLng? = null,
+    val currentLocationLog: LocationLog? = null,  // Added for meetings
     val selectedClient: Client? = null,
     val userClockedIn: Boolean = false,
-    val isTrackingEnabled: Boolean = false,   // <-- new
+    val isTrackingEnabled: Boolean = false,
     val error: String? = null
 )
 
@@ -30,6 +32,7 @@ data class MapUiState(
  * Responsibilities:
  * - Enforce that background location tracking is enabled before loading any clients
  * - React to changes in tracking state via [LocationTrackingStateManager]
+ * - Provide current location for meetings
  * - Load client data when allowed, and clear it immediately when tracking stops
  */
 class MapViewModel(
@@ -44,6 +47,53 @@ class MapViewModel(
     init {
         observeTrackingState()
         refreshTrackingState()
+        startLocationPolling()
+    }
+
+    /**
+     * Poll for location updates every 10 seconds
+     */
+    private fun startLocationPolling() {
+        viewModelScope.launch {
+            while (true) {
+                try {
+                    // Get location using GlobalContext (like you already do in requestCurrentLocation)
+                    val locationManager = com.bluemix.clients_lead.features.location.LocationManager(
+                        context = org.koin.core.context.GlobalContext.get().get()
+                    )
+
+                    val location = locationManager.getLastKnownLocation()
+                    location?.let {
+                        // Update LatLng for map display
+                        val latLng = LatLng(it.latitude, it.longitude)
+
+                        // Update LocationLog for meeting records
+                        val locationLog = LocationLog(
+                            id = "",
+                            userId = getCurrentUserId() ?: "",
+                            latitude = it.latitude,
+                            longitude = it.longitude,
+                            accuracy = it.accuracy.toDouble(),
+                            timestamp = System.currentTimeMillis().toString(),
+                            createdAt = System.currentTimeMillis().toString(),
+                            battery = 0
+                        )
+
+                        _uiState.value = _uiState.value.copy(
+                            currentLocation = latLng,
+                            currentLocationLog = locationLog
+                        )
+
+                        Timber.d("📍 Location updated: ${it.latitude}, ${it.longitude}")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to get current location")
+                }
+
+                // Poll every 10 seconds
+                kotlinx.coroutines.delay(10000)
+            }
+        }
     }
 
     /**
@@ -68,7 +118,9 @@ class MapViewModel(
                         userClockedIn = false,
                         selectedClient = null,
                         isLoading = false,
-                        error = null
+                        error = null,
+                        currentLocation = null,
+                        currentLocationLog = null
                     )
                 } else {
                     // Tracking just became active → attempt to load clients
@@ -77,8 +129,6 @@ class MapViewModel(
             }
         }
     }
-
-
 
     /**
      * Explicit refresh of tracking state from the system.
@@ -162,6 +212,29 @@ class MapViewModel(
 
     fun updateCurrentLocation(location: LatLng) {
         _uiState.value = _uiState.value.copy(currentLocation = location)
+    }
+
+    /**
+     * Request current location from the location manager.
+     * This is called when map loads to center on user's position.
+     */
+    fun requestCurrentLocation() {
+        viewModelScope.launch {
+            try {
+                val locationManager = com.bluemix.clients_lead.features.location.LocationManager(
+                    context = org.koin.core.context.GlobalContext.get().get()
+                )
+
+                val location = locationManager.getLastKnownLocation()
+                location?.let {
+                    val latLng = LatLng(it.latitude, it.longitude)
+                    updateCurrentLocation(latLng)
+                    Timber.d("Current location updated: $latLng")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get current location")
+            }
+        }
     }
 
     fun selectClient(client: Client?) {

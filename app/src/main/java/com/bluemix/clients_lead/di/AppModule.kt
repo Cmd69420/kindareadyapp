@@ -59,7 +59,7 @@ val appModule = module {
         MapViewModel(
             get(), // GetClientsWithLocation
             get(), // GetCurrentUserId
-            get()  // LocationTrackingStateManager
+            get(),
         )
     }
 }

@@ -52,6 +52,6 @@ data class UpdateMeetingRequest(
     val comments: String? = null,
     val attachments: List<String>? = null,
     val latitude: Double? = null,
-    val longitude: Double? = null,
-    val accuracy: Double? = null
+    val longitude: Double? = null,  // ← This was missing
+    val accuracy: Double? = null     // ← This was missing
 )
