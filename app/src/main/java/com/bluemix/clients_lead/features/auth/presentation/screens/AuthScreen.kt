@@ -9,7 +9,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,17 +39,20 @@ fun AuthScreen(
     val ui = viewModel.state.collectAsState()
     var page by rememberSaveable { mutableStateOf(AuthPage.Welcome) }
 
-    // navigate to Home when VM says we're signed in
+    // Navigate to Home when VM says we're signed in
     LaunchedEffect(Unit) {
-        viewModel.effects.collectLatest { if (it is AuthEffect.SignedIn) onSignedIn() }
+        viewModel.effects.collectLatest {
+            if (it is AuthEffect.SignedIn) onSignedIn()
+        }
     }
 
-    // back behaviour: subpages -> welcome
+    // Back behaviour: subpages -> welcome
     BackHandler(enabled = page != AuthPage.Welcome) {
         page = AuthPage.Welcome
     }
 
-    // optional one-shot messages
+    // Optional one-shot messages
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(ui.value.error) {
         ui.value.error?.let { snackbarHostState.showSnackbar(it) }
@@ -57,10 +62,8 @@ fun AuthScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-
-
-        ) { innerPadding ->
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { innerPadding ->
         AnimatedContent(
             targetState = page,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -72,7 +75,12 @@ fun AuthScreen(
                 AuthPage.Welcome -> WelcomeScreen(
                     onSignIn = { page = AuthPage.SignIn },
                     onSignUp = { page = AuthPage.SignUp },
-                    onMagicLink = { page = AuthPage.Magic }
+                    onMagicLink = { page = AuthPage.Magic },
+                    onDemo = {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Demo mode coming soon!")
+                        }
+                    }
                 )
 
                 AuthPage.SignIn -> EmailPasswordScreen(
@@ -116,4 +124,3 @@ fun AuthScreen(
         }
     }
 }
-

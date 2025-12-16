@@ -90,6 +90,17 @@ android {
 }
 
 dependencies {
+
+
+    implementation("androidx.compose.material3:material3:1.1.2")
+
+    // Already have these from your project
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.animation:animation")
+
+
+
     // Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
