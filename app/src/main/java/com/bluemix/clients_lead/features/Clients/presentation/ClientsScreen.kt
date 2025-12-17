@@ -58,8 +58,10 @@ import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,6 +75,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
@@ -87,9 +90,6 @@ import ui.components.textfield.TextField
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
 import ui.foundation.ripple
-
-
-
 
 @Composable
 fun ClientsScreen(
@@ -118,13 +118,13 @@ fun ClientsScreen(
     }
 
     Scaffold(
-        modifier = Modifier.background(AppTheme.colors.background),
+        modifier = Modifier.background(Color(0xFF000000)),
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopBar(
                 colors = TopBarDefaults.topBarColors(
-                    containerColor = AppTheme.colors.background,
-                    scrolledContainerColor = AppTheme.colors.surface
+                    containerColor = Color(0xFF000000),
+                    scrolledContainerColor = Color(0xFF1A1A1A)
                 )
             ) {
                 Row(
@@ -137,7 +137,7 @@ fun ClientsScreen(
                     Text(
                         text = "Clients",
                         style = AppTheme.typography.h2,
-                        color = AppTheme.colors.text
+                        color = Color.White
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -148,7 +148,7 @@ fun ClientsScreen(
                             Icon(
                                 imageVector = if (showSearchBar) Icons.Default.Close else Icons.Default.Search,
                                 contentDescription = if (showSearchBar) "Close search" else "Search",
-                                tint = AppTheme.colors.text
+                                tint = Color.White
                             )
                         }
 
@@ -162,14 +162,14 @@ fun ClientsScreen(
                             if (uiState.isLoading) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
-                                    color = AppTheme.colors.primary,
+                                    color = Color(0xFF5E92F3),
                                     strokeWidth = 2.dp
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Upload,
                                     contentDescription = "Upload Excel",
-                                    tint = AppTheme.colors.text
+                                    tint = Color.White
                                 )
                             }
                         }
@@ -193,7 +193,7 @@ fun ClientsScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Refresh",
-                                tint = AppTheme.colors.text,
+                                tint = Color.White,
                                 modifier = Modifier.graphicsLayer { rotationZ = rotation }
                             )
                         }
@@ -212,12 +212,12 @@ fun ClientsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (uiState.error?.contains("success", ignoreCase = true) == true)
-                                AppTheme.colors.success.copy(alpha = 0.9f)
+                                Color(0xFF4CAF50)
                             else
-                                AppTheme.colors.error.copy(alpha = 0.9f)
+                                Color(0xFFFF5252)
                         )
                         .padding(16.dp)
                 ) {
@@ -229,7 +229,7 @@ fun ClientsScreen(
                         Text(
                             text = uiState.error ?: "",
                             style = AppTheme.typography.body2,
-                            color = AppTheme.colors.onPrimary,
+                            color = Color.White,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(
@@ -238,7 +238,7 @@ fun ClientsScreen(
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Dismiss",
-                                tint = AppTheme.colors.onPrimary
+                                tint = Color.White
                             )
                         }
                     }
@@ -246,94 +246,111 @@ fun ClientsScreen(
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(AppTheme.colors.background)
-        ) {
-            // Animated Search Field
-            AnimatedVisibility(
-                visible = showSearchBar,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(Color(0xFF000000))
             ) {
-                TextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.searchClients(it) },
-                    placeholder = { Text("Search clients...") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    trailingIcon = {
-                        AnimatedVisibility(
-                            visible = uiState.searchQuery.isNotEmpty(),
-                            enter = scaleIn() + fadeIn(),
-                            exit = scaleOut() + fadeOut()
-                        ) {
-                            IconButton(onClick = { viewModel.searchClients("") }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear",
-                                    tint = AppTheme.colors.textSecondary
-                                )
+                // Animated Search Field
+                AnimatedVisibility(
+                    visible = showSearchBar,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    TextField(
+                        value = uiState.searchQuery,
+                        onValueChange = { viewModel.searchClients(it) },
+                        placeholder = { Text("Search clients...", color = Color(0xFF808080)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        trailingIcon = {
+                            AnimatedVisibility(
+                                visible = uiState.searchQuery.isNotEmpty(),
+                                enter = scaleIn() + fadeIn(),
+                                exit = scaleOut() + fadeOut()
+                            ) {
+                                IconButton(onClick = { viewModel.searchClients("") }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear",
+                                        tint = Color(0xFF808080)
+                                    )
+                                }
                             }
                         }
+                    )
+                }
+
+                // Filter Chips with scroll animation
+                AnimatedVisibility(visible = uiState.isTrackingEnabled) {
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            items = listOf(
+                                ClientFilter.ALL to "All",
+                                ClientFilter.ACTIVE to "Active",
+                                ClientFilter.INACTIVE to "Inactive",
+                                ClientFilter.COMPLETED to "Completed"
+                            )
+                        ) { (filter, label) ->
+                            AnimatedFilterChip(
+                                label = label,
+                                selected = uiState.selectedFilter == filter,
+                                onClick = { viewModel.setFilter(filter) }
+                            )
+                        }
                     }
+                }
+
+                // Content with crossfade
+                Crossfade(
+                    targetState = when {
+                        uiState.isLoading -> "loading"
+                        uiState.error != null && !uiState.error!!.contains(
+                            "success",
+                            ignoreCase = true
+                        ) -> "error"
+
+                        uiState.filteredClients.isEmpty() -> "empty"
+                        else -> "content"
+                    },
+                    animationSpec = tween(300),
+                    label = "contentCrossfade"
+                ) { state ->
+                    when (state) {
+                        "loading" -> LoadingContent()
+                        "error" -> ErrorContent(
+                            error = uiState.error ?: "Unknown error",
+                            onRetry = { viewModel.refresh() }
+                        )
+
+                        "empty" -> EmptyContent(
+                            searchQuery = uiState.searchQuery,
+                            filter = uiState.selectedFilter
+                        )
+
+                        "content" -> ClientsList(
+                            clients = uiState.filteredClients,
+                            onClientClick = onNavigateToDetail
+                        )
+                    }
+                }
+            }
+
+            // Full-screen Tracking Warning Overlay
+            if (!uiState.isTrackingEnabled) {
+                TrackingRequiredOverlay(
+                    modifier = Modifier.fillMaxSize(),
+                    onEnableTracking = { viewModel.enableTracking() },
+                    onRefreshStatus = { viewModel.refreshTrackingState() }
                 )
-            }
-
-            // Filter Chips with scroll animation
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(
-                    items = listOf(
-                        ClientFilter.ALL to "All",
-                        ClientFilter.ACTIVE to "Active",
-                        ClientFilter.INACTIVE to "Inactive",
-                        ClientFilter.COMPLETED to "Completed"
-                    )
-                ) { (filter, label) ->
-                    AnimatedFilterChip(
-                        label = label,
-                        selected = uiState.selectedFilter == filter,
-                        onClick = { viewModel.setFilter(filter) }
-                    )
-                }
-            }
-
-            // Content with crossfade
-            Crossfade(
-                targetState = when {
-                    uiState.isLoading -> "loading"
-                    uiState.error != null && !uiState.error!!.contains("success", ignoreCase = true) -> "error"
-                    uiState.filteredClients.isEmpty() -> "empty"
-                    else -> "content"
-                },
-                animationSpec = tween(300),
-                label = "contentCrossfade"
-            ) { state ->
-                when (state) {
-                    "loading" -> LoadingContent()
-                    "error" -> ErrorContent(
-                        error = uiState.error ?: "Unknown error",
-                        onRetry = { viewModel.refresh() }
-                    )
-
-                    "empty" -> EmptyContent(
-                        searchQuery = uiState.searchQuery,
-                        filter = uiState.selectedFilter
-                    )
-
-                    "content" -> ClientsList(
-                        clients = uiState.filteredClients,
-                        onClientClick = onNavigateToDetail
-                    )
-                }
             }
         }
     }
@@ -352,27 +369,33 @@ private fun AnimatedFilterChip(
     )
 
     val backgroundColor by animateColorAsState(
-        targetValue = if (selected) AppTheme.colors.primary else AppTheme.colors.surface,
+        targetValue = if (selected) Color.White else Color(0xFF2A2A2A),
         animationSpec = tween(200),
         label = "chipBackgroundColor"
+    )
+
+    val textColor by animateColorAsState(
+        targetValue = if (selected) Color.Black else Color.White,
+        animationSpec = tween(200),
+        label = "chipTextColor"
     )
 
     Box(
         modifier = Modifier
             .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(backgroundColor)
             .clickable(
                 onClick = onClick,
                 indication = ripple(),
                 interactionSource = remember { MutableInteractionSource() }
             )
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {
         Text(
             text = label,
             style = AppTheme.typography.label1,
-            color = if (selected) AppTheme.colors.onPrimary else AppTheme.colors.text
+            color = textColor
         )
     }
 }
@@ -424,9 +447,8 @@ private fun AnimatedClientCard(
             .fillMaxWidth()
             .scale(scale)
             .alpha(alpha)
-            .clip(RoundedCornerShape(12.dp))
-            .background(AppTheme.colors.surface)
-            // ✅ Combined press and click in one pointerInput
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF2A2A2A))
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -434,7 +456,7 @@ private fun AnimatedClientCard(
                         val released = tryAwaitRelease()
                         isPressed = false
                         if (released) {
-                            onClick() // ✅ Call navigation here
+                            onClick()
                         }
                     }
                 )
@@ -455,14 +477,14 @@ private fun AnimatedClientCard(
                 Text(
                     text = client.name,
                     style = AppTheme.typography.h4,
-                    color = AppTheme.colors.text
+                    color = Color.White
                 )
 
                 client.email?.let {
                     Text(
                         text = it,
                         style = AppTheme.typography.body2,
-                        color = AppTheme.colors.textSecondary
+                        color = Color(0xFFB0B0B0)
                     )
                 }
 
@@ -470,7 +492,7 @@ private fun AnimatedClientCard(
                     Text(
                         text = it,
                         style = AppTheme.typography.body3,
-                        color = AppTheme.colors.textSecondary
+                        color = Color(0xFFB0B0B0)
                     )
                 }
 
@@ -488,7 +510,7 @@ private fun AnimatedClientCard(
             Icon(
                 imageVector = Icons.Default.KeyboardArrowRight,
                 contentDescription = "View details",
-                tint = AppTheme.colors.textSecondary,
+                tint = Color(0xFF808080),
                 modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
             )
         }
@@ -515,10 +537,10 @@ private fun AnimatedStatusIcon(status: String) {
             .clip(RoundedCornerShape(12.dp))
             .background(
                 when (status) {
-                    "active" -> AppTheme.colors.success.copy(alpha = 0.1f)
-                    "inactive" -> AppTheme.colors.disabled
-                    "completed" -> AppTheme.colors.tertiary.copy(alpha = 0.1f)
-                    else -> AppTheme.colors.surface
+                    "active" -> Color(0xFF4CAF50).copy(alpha = 0.2f)
+                    "inactive" -> Color(0xFF404040)
+                    "completed" -> Color(0xFF5E92F3).copy(alpha = 0.2f)
+                    else -> Color(0xFF2A2A2A)
                 }
             ),
         contentAlignment = Alignment.Center
@@ -532,10 +554,10 @@ private fun AnimatedStatusIcon(status: String) {
             },
             contentDescription = status,
             tint = when (status) {
-                "active" -> AppTheme.colors.success
-                "inactive" -> AppTheme.colors.textDisabled
-                "completed" -> AppTheme.colors.tertiary
-                else -> AppTheme.colors.text
+                "active" -> Color(0xFF4CAF50)
+                "inactive" -> Color(0xFF808080)
+                "completed" -> Color(0xFF5E92F3)
+                else -> Color.White
             }
         )
     }
@@ -548,7 +570,7 @@ private fun AnimatedLocationBadge(hasLocation: Boolean) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         val tint by animateColorAsState(
-            targetValue = if (hasLocation) AppTheme.colors.success else AppTheme.colors.textDisabled,
+            targetValue = if (hasLocation) Color(0xFF4CAF50) else Color(0xFF808080),
             animationSpec = tween(200),
             label = "locationIconTint"
         )
@@ -563,7 +585,7 @@ private fun AnimatedLocationBadge(hasLocation: Boolean) {
         Text(
             text = if (hasLocation) "Has location" else "No location",
             style = AppTheme.typography.label3,
-            color = AppTheme.colors.textSecondary
+            color = Color(0xFFB0B0B0)
         )
     }
 }
@@ -578,11 +600,11 @@ private fun LoadingContent() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            CircularProgressIndicator(color = AppTheme.colors.primary)
+            CircularProgressIndicator(color = Color(0xFF5E92F3))
             Text(
                 text = "Loading clients...",
                 style = AppTheme.typography.body1,
-                color = AppTheme.colors.textSecondary
+                color = Color(0xFFB0B0B0)
             )
         }
     }
@@ -603,14 +625,21 @@ private fun ErrorContent(error: String, onRetry: () -> Unit) {
                 imageVector = Icons.Default.Error,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = AppTheme.colors.error
+                tint = Color(0xFFFF5252)
             )
             Text(
                 text = error,
                 style = AppTheme.typography.body1,
-                color = AppTheme.colors.error
+                color = Color(0xFFFF5252),
+                textAlign = TextAlign.Center
             )
-            Button(onClick = onRetry) {
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF5E92F3),
+                    contentColor = Color.White
+                )
+            ) {
                 Text("Retry", style = AppTheme.typography.button)
             }
         }
@@ -631,7 +660,7 @@ private fun EmptyContent(searchQuery: String, filter: ClientFilter) {
                 imageVector = Icons.Default.PersonOff,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = AppTheme.colors.textDisabled
+                tint = Color(0xFF808080)
             )
             Text(
                 text = if (searchQuery.isNotEmpty()) {
@@ -640,8 +669,93 @@ private fun EmptyContent(searchQuery: String, filter: ClientFilter) {
                     "No ${filter.name.lowercase()} clients"
                 },
                 style = AppTheme.typography.body1,
-                color = AppTheme.colors.textSecondary,
+                color = Color(0xFFB0B0B0),
                 textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// Tracking Required Overlay
+@Composable
+private fun TrackingRequiredOverlay(
+    modifier: Modifier = Modifier,
+    onEnableTracking: () -> Unit,
+    onRefreshStatus: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .background(Color(0xFF000000).copy(alpha = 0.95f))
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOff,
+                contentDescription = null,
+                modifier = Modifier.size(52.dp),
+                tint = Color(0xFF5E92F3)
+            )
+
+            Text(
+                text = "Location tracking required",
+                style = AppTheme.typography.h3,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "To protect client data and verify that you are in the correct area, background location tracking must remain active while viewing clients.",
+                style = AppTheme.typography.body2,
+                color = Color(0xFFB0B0B0),
+                textAlign = TextAlign.Center
+            )
+
+            Button(
+                onClick = onEnableTracking,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF5E92F3),
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    text = "Enable Location Tracking",
+                    style = AppTheme.typography.button
+                )
+            }
+
+            OutlinedButton(
+                onClick = onRefreshStatus,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Refresh tracking status",
+                    style = AppTheme.typography.button
+                )
+            }
+
+            Text(
+                text = "We only use your location to verify your working area and show nearby clients. Your data is transmitted securely and never shared with other users.",
+                style = AppTheme.typography.body2,
+                color = Color(0xFFB0B0B0),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }

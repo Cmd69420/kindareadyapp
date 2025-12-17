@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1052159638834",
+    "project_id": "brah-b2539",
+    "storage_bucket": "brah-b2539.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1052159638834:android:f43aa73acf229c8284ab2b",
+        "android_client_info": {
+          "package_name": "com.copas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLT6eXqBJEHYrSlOPNgDQXHxplg1C84sU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

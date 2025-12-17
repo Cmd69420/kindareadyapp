@@ -11,6 +11,7 @@ import com.bluemix.clients_lead.core.network.TokenStorage
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.usecases.GetAllClients
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
+import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.forms.*
@@ -32,24 +33,89 @@ data class ClientsUiState(
     val filteredClients: List<Client> = emptyList(),
     val selectedFilter: ClientFilter = ClientFilter.ACTIVE,
     val searchQuery: String = "",
+    val isTrackingEnabled: Boolean = false,  // ✅ Added tracking state
     val error: String? = null
 )
 
 class ClientsViewModel(
     private val getAllClients: GetAllClients,
     private val tokenStorage: TokenStorage,
-    private val getCurrentUserId: GetCurrentUserId
+    private val getCurrentUserId: GetCurrentUserId,
+    private val locationTrackingStateManager: LocationTrackingStateManager  // ✅ Inject tracking manager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ClientsUiState())
     val uiState: StateFlow<ClientsUiState> = _uiState.asStateFlow()
 
     init {
-        loadClients()
+        observeTrackingState()
+        refreshTrackingState()
     }
 
+    /**
+     * ✅ Observe tracking state changes and enforce security rules
+     */
+    private fun observeTrackingState() {
+        viewModelScope.launch {
+            locationTrackingStateManager.trackingState.collect { isTracking ->
+                Timber.d("ClientsViewModel: tracking state changed = $isTracking")
+
+                _uiState.value = _uiState.value.copy(
+                    isTrackingEnabled = isTracking
+                )
+
+                if (!isTracking) {
+                    // ✅ Security: Clear clients immediately when tracking stops
+                    Timber.d("Tracking disabled. Clearing clients from UI state.")
+                    _uiState.value = _uiState.value.copy(
+                        clients = emptyList(),
+                        filteredClients = emptyList(),
+                        isLoading = false,
+                        error = null
+                    )
+                } else {
+                    // ✅ Tracking just became active → load clients
+                    loadClients()
+                }
+            }
+        }
+    }
+
+    /**
+     * ✅ Refresh tracking state from system
+     */
+    fun refreshTrackingState() {
+        Timber.d("ClientsViewModel: refreshing tracking state from system")
+        locationTrackingStateManager.updateTrackingState()
+    }
+
+    /**
+     * ✅ Enable tracking from UI
+     */
+    fun enableTracking() {
+        viewModelScope.launch {
+            Timber.d("ClientsViewModel: enableTracking() requested from UI")
+            locationTrackingStateManager.startTracking()
+        }
+    }
+
+    /**
+     * ✅ Load clients only if tracking is enabled
+     */
     fun loadClients() {
         viewModelScope.launch {
+            val isTracking = locationTrackingStateManager.isCurrentlyTracking()
+            if (!isTracking) {
+                Timber.w("Denied client loading: tracking is not enabled.")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    clients = emptyList(),
+                    filteredClients = emptyList(),
+                    error = "Location tracking must be enabled to view clients."
+                )
+                return@launch
+            }
+
             Timber.d("Loading clients...")
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
@@ -149,7 +215,7 @@ class ClientsViewModel(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-                Timber.d("📁 Starting Excel upload...")
+                Timber.d("📂 Starting Excel upload...")
 
                 // Read file bytes
                 val inputStream = context.contentResolver.openInputStream(uri)

@@ -49,6 +49,7 @@ fun MeetingBottomSheet(
     var comments by remember { mutableStateOf("") }
     var attachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var showEndConfirmation by remember { mutableStateOf(false) }
+    var showDismissWarning by remember { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -56,28 +57,36 @@ fun MeetingBottomSheet(
         attachments = uris
     }
 
+    val canDismiss = activeMeeting == null
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         // Dim backdrop
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f))
+                .background(Color.Black.copy(alpha = 0.6f))
                 .clickable(
-                    onClick = onDismiss,
+                    onClick = {
+                        if (canDismiss) {
+                            onDismiss()
+                        } else {
+                            showDismissWarning = true
+                        }
+                    },
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 )
         )
 
-        // Bottom sheet container
+        // Bottom sheet container - Dark theme
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .padding(top = 80.dp)
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(AppTheme.colors.surface)
+                .background(Color(0xFF1A1A1A))
                 .clickable(
                     onClick = {},
                     indication = null,
@@ -103,24 +112,62 @@ fun MeetingBottomSheet(
                         Text(
                             text = if (activeMeeting != null) "Meeting in Progress" else "Start Meeting",
                             style = AppTheme.typography.h3,
-                            color = AppTheme.colors.text
+                            color = Color.White
                         )
                         Text(
                             text = client.name,
                             style = AppTheme.typography.body2,
-                            color = AppTheme.colors.textSecondary
+                            color = Color(0xFFB0B0B0)
                         )
                     }
 
                     IconButton(
-                        onClick = onDismiss,
+                        onClick = {
+                            if (canDismiss) {
+                                onDismiss()
+                            } else {
+                                showDismissWarning = true
+                            }
+                        },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = AppTheme.colors.textSecondary
+                            tint = if (canDismiss) Color(0xFFB0B0B0) else Color(0xFF606060)
                         )
+                    }
+                }
+
+                // Warning message when meeting is active
+                AnimatedVisibility(
+                    visible = activeMeeting != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF2962FF).copy(alpha = 0.15f))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = Color(0xFF5E92F3),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Please end this meeting before closing",
+                                style = AppTheme.typography.body2,
+                                color = Color(0xFF5E92F3)
+                            )
+                        }
                     }
                 }
 
@@ -142,7 +189,7 @@ fun MeetingBottomSheet(
                         Text(
                             text = "Meeting Notes",
                             style = AppTheme.typography.body1,
-                            color = AppTheme.colors.text
+                            color = Color.White
                         )
 
                         OutlinedTextField(
@@ -173,16 +220,20 @@ fun MeetingBottomSheet(
                             Text(
                                 text = "Attachments",
                                 style = AppTheme.typography.body1,
-                                color = AppTheme.colors.text
+                                color = Color.White
                             )
 
                             TextButton(onClick = { filePickerLauncher.launch("*/*") }) {
                                 androidx.compose.material3.Icon(
                                     imageVector = Icons.Default.AttachFile,
-                                    contentDescription = null
+                                    contentDescription = null,
+                                    tint = Color(0xFF5E92F3)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Add Files")
+                                Text(
+                                    "Add Files",
+                                    color = Color(0xFF5E92F3)
+                                )
                             }
                         }
 
@@ -190,7 +241,7 @@ fun MeetingBottomSheet(
                             Text(
                                 text = "No files attached",
                                 style = AppTheme.typography.body2,
-                                color = AppTheme.colors.textSecondary
+                                color = Color(0xFF808080)
                             )
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -220,7 +271,7 @@ fun MeetingBottomSheet(
                         "Add notes and attachments before ending the meeting. All data will be saved to your meeting history.",
                     style = AppTheme.typography.body2,
                     textAlign = TextAlign.Center,
-                    color = AppTheme.colors.textSecondary,
+                    color = Color(0xFF808080),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -228,6 +279,7 @@ fun MeetingBottomSheet(
             }
         }
 
+        // End Meeting Confirmation Dialog
         if (showEndConfirmation) {
             EndMeetingDialog(
                 comments = comments,
@@ -237,6 +289,14 @@ fun MeetingBottomSheet(
                     showEndConfirmation = false
                     onEndMeeting(comments, attachments)
                 }
+            )
+        }
+
+        // Dismiss Warning Dialog
+        if (showDismissWarning) {
+            DismissWarningDialog(
+                clientName = client.name,
+                onDismiss = { showDismissWarning = false }
             )
         }
     }
@@ -251,7 +311,7 @@ private fun ClientInfoCard(client: Client) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(AppTheme.colors.background)
+            .background(Color(0xFF0D0D0D))
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,14 +321,14 @@ private fun ClientInfoCard(client: Client) {
                     Icon(
                         imageVector = Icons.Default.LocationOn,
                         contentDescription = null,
-                        tint = AppTheme.colors.primary,
+                        tint = Color(0xFF5E92F3),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = it,
                         style = AppTheme.typography.body2,
-                        color = AppTheme.colors.textSecondary
+                        color = Color(0xFFB0B0B0)
                     )
                 }
             }
@@ -278,14 +338,14 @@ private fun ClientInfoCard(client: Client) {
                     Icon(
                         imageVector = Icons.Default.Phone,
                         contentDescription = null,
-                        tint = AppTheme.colors.primary,
+                        tint = Color(0xFF5E92F3),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = it,
                         style = AppTheme.typography.body2,
-                        color = AppTheme.colors.textSecondary
+                        color = Color(0xFFB0B0B0)
                     )
                 }
             }
@@ -306,6 +366,12 @@ private fun MeetingActionButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF5E92F3),
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFF404040),
+            disabledContentColor = Color(0xFF808080)
+        ),
         enabled = !isLoading
     ) {
         Row(
@@ -316,24 +382,27 @@ private fun MeetingActionButton(
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
-                    color = AppTheme.colors.onPrimary,
+                    color = Color.White,
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = if (activeMeeting == null) "Starting..." else "Ending...",
-                    style = AppTheme.typography.button
+                    style = AppTheme.typography.button,
+                    color = Color.White
                 )
             } else {
-                Icon(
-                    imageVector = if (activeMeeting == null) Icons.Default.PlayArrow else Icons.Default.Stop,
+                androidx.compose.material3.Icon(
+                    imageVector = if (activeMeeting == null) Icons.Default.Handshake else Icons.Default.CheckCircle,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
+                    tint = Color.White
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = if (activeMeeting == null) "Start Meeting" else "End Meeting",
-                    style = AppTheme.typography.button
+                    style = AppTheme.typography.button,
+                    color = Color.White
                 )
             }
         }
@@ -370,10 +439,11 @@ private fun MeetingDurationCard(meeting: Meeting) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(AppTheme.colors.primary.copy(alpha = 0.1f))
+            .background(Color(0xFF2962FF).copy(alpha = 0.15f))
             .padding(16.dp)
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -382,20 +452,20 @@ private fun MeetingDurationCard(meeting: Meeting) {
                 Text(
                     text = "Meeting Duration",
                     style = AppTheme.typography.label2,
-                    color = AppTheme.colors.textSecondary
+                    color = Color(0xFFB0B0B0)
                 )
                 Text(
                     text = formatDuration(duration),
                     style = AppTheme.typography.h2,
-                    color = AppTheme.colors.primary
+                    color = Color(0xFF5E92F3)
                 )
             }
 
-            Icon(
+            androidx.compose.material3.Icon(
                 imageVector = Icons.Default.Timer,
                 contentDescription = null,
                 modifier = Modifier.size(32.dp),
-                tint = AppTheme.colors.primary
+                tint = Color(0xFF5E92F3)
             )
         }
     }
@@ -408,7 +478,7 @@ private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(AppTheme.colors.background)
+            .background(Color(0xFF0D0D0D))
             .padding(12.dp)
     ) {
         Row(
@@ -421,25 +491,25 @@ private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(
+                androidx.compose.material3.Icon(
                     imageVector = Icons.Default.Description,
                     contentDescription = null,
-                    tint = AppTheme.colors.primary,
+                    tint = Color(0xFF5E92F3),
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = uri.lastPathSegment ?: "File",
                     style = AppTheme.typography.body2,
-                    color = AppTheme.colors.text
+                    color = Color.White
                 )
             }
 
             IconButton(onClick = onRemove) {
-                Icon(
+                androidx.compose.material3.Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = null,
-                    tint = AppTheme.colors.error,
+                    tint = Color(0xFFFF5252),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -458,14 +528,14 @@ private fun EndMeetingDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f)),
+            .background(Color.Black.copy(alpha = 0.8f)),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .clip(RoundedCornerShape(20.dp))
-                .background(AppTheme.colors.surface)
+                .background(Color(0xFF1A1A1A))
                 .padding(24.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -473,13 +543,13 @@ private fun EndMeetingDialog(
                 Text(
                     text = "End Meeting?",
                     style = AppTheme.typography.h3,
-                    color = AppTheme.colors.text
+                    color = Color.White
                 )
 
                 Text(
                     text = "Are you sure you want to end this meeting? Your notes and attachments will be saved.",
                     style = AppTheme.typography.body2,
-                    color = AppTheme.colors.textSecondary
+                    color = Color(0xFFB0B0B0)
                 )
 
                 Row(
@@ -489,25 +559,83 @@ private fun EndMeetingDialog(
 
                     OutlinedButton(
                         onClick = onCancel,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            color = AppTheme.colors.text
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color.White
                         )
+                    ) {
+                        Text("Cancel", color = Color.White)
                     }
 
                     androidx.compose.material3.Button(
                         onClick = onConfirm,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AppTheme.colors.primary,
-                            contentColor = AppTheme.colors.onPrimary
+                            containerColor = Color(0xFF5E92F3),
+                            contentColor = Color.White
                         )
                     ) {
-                        Text("End",
-                            color = AppTheme.colors.black)
+                        Text("End", color = Color.White)
                     }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun DismissWarningDialog(
+    clientName: String,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.8f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFF1A1A1A))
+                .padding(24.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFFF5252),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Text(
+                        text = "Meeting in Progress",
+                        style = AppTheme.typography.h3,
+                        color = Color.White
+                    )
+                }
+
+                Text(
+                    text = "You have an active meeting with $clientName. Please end the meeting before closing this screen.",
+                    style = AppTheme.typography.body1,
+                    color = Color(0xFFB0B0B0)
+                )
+
+                androidx.compose.material3.Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF5E92F3),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("Got it", color = Color.White)
                 }
             }
         }

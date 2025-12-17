@@ -11,22 +11,26 @@ class NavigationManager(private val navController: NavController) {
 
     /**
      * Navigate to main authenticated screen (Map)
-     * Clears entire back stack
+     * Clears entire back stack including Gate and Auth
      */
     fun navigateToMain() {
         navController.navigate(Route.Map) {
-            popUpTo(Route.Gate) { inclusive = true }
+            // ✅ Clear everything including Gate and Auth screens
+            popUpTo(0) {
+                inclusive = true
+            }
             launchSingleTop = true
         }
     }
 
     /**
      * Navigate to authentication screen
-     * Clears entire back stack
+     * Clears entire back stack including any previous user sessions
      */
     fun navigateToAuth() {
         navController.navigate(Route.Auth) {
-            popUpTo(navController.graph.findStartDestination().id) {
+            // ✅ Clear EVERYTHING - removes all user sessions from stack
+            popUpTo(0) {
                 inclusive = true
             }
             launchSingleTop = true

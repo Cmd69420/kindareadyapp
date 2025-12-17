@@ -32,38 +32,36 @@ class LocationTrackingStateManager(
 
     fun isCurrentlyTracking(): Boolean = _trackingState.value
 
-    fun startTracking() {
+    suspend fun startTracking() {
         Timber.tag(TAG).d("Request received to START location tracking")
 
-        // Permission validation kept unchanged
         if (!hasLocationPermissions()) {
             Timber.tag(TAG).e("❌ Cannot start tracking - Location permissions not granted!")
             _trackingState.value = false
             return
         }
 
-        // Avoid duplicate start
         if (isServiceRunning(LocationTrackerService::class.java)) {
             Timber.tag(TAG).w("⚠️ Service already running, skipping start")
             _trackingState.value = true
             return
         }
 
-        // NEW — Forward request to the small manager
         try {
             trackingManager.startTracking()
-            Timber.tag(TAG).d("➡ Forwarded START to LocationTrackingManager")
+            Timber.tag(TAG).d("➡️ Forwarded START to LocationTrackingManager")
 
-            _trackingState.value = true
+            // ✅ Give service time to actually start
+            kotlinx.coroutines.delay(150)
+
+            updateTrackingState()
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "❌ Failed forwarding start to small manager")
             _trackingState.value = false
         }
-
-        updateTrackingState()
     }
 
-    fun stopTracking() {
+    suspend fun stopTracking() {
         Timber.tag(TAG).d("Request received to STOP location tracking")
 
         if (!isServiceRunning(LocationTrackerService::class.java)) {
@@ -72,16 +70,19 @@ class LocationTrackingStateManager(
             return
         }
 
-        // NEW — Forward stop to the small manager
         try {
             trackingManager.stopTracking()
-            Timber.tag(TAG).d("➡ Forwarded STOP to LocationTrackingManager")
+            Timber.tag(TAG).d("➡️ Forwarded STOP to LocationTrackingManager")
+
+            // ✅ Give service time to actually stop
+            kotlinx.coroutines.delay(150)
+
+            // ✅ NOW verify the service actually stopped
+            updateTrackingState()
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "❌ Failed forwarding stop to small manager")
+            _trackingState.value = false
         }
-
-        _trackingState.value = false
-        updateTrackingState()
     }
 
     fun updateTrackingState() {

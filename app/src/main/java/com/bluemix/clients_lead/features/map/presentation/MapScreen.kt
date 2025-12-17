@@ -13,10 +13,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.animation.scaleIn
 import timber.log.Timber
 import androidx.compose.animation.scaleOut
-import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Error
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -55,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
+import android.app.Activity
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.features.expense.presentation.TripExpenseSheet
@@ -101,8 +104,15 @@ fun MapScreen(
     var lastProximityCheck by remember { mutableStateOf(0L) }
     var isRefreshing by remember { mutableStateOf(false) }
     var showExpenseSheet by remember { mutableStateOf(false) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val activity = context as? Activity
+
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(DefaultLocation, 16f)
+    }
+    BackHandler {
+        showExitDialog = true
     }
 
     val locationPermissions = rememberMultiplePermissionsState(
@@ -437,7 +447,7 @@ fun MapScreen(
                     }
                 }
 
-                // Floating Action Button
+                // Floating Action Button - Changed to Receipt icon
                 AnimatedVisibility(
                     visible = uiState.isTrackingEnabled,
                     modifier = Modifier
@@ -448,7 +458,7 @@ fun MapScreen(
                 ) {
                     ui.components.FloatingActionButton(
                         onClick = { showExpenseSheet = true },
-                        icon = Icons.Default.Add,
+                        icon = Icons.Default.Receipt,
                         contentDescription = "Add Trip Expense"
                     )
                 }
@@ -489,6 +499,52 @@ fun MapScreen(
             Timber.e("Meeting error: $error")
             meetingViewModel.clearError()
         }
+    }
+
+    if (showExitDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = {
+                Text(
+                    text = "Exit GeoTrack?",
+                    style = AppTheme.typography.h3,
+                    color = AppTheme.colors.text
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to exit the app?",
+                    style = AppTheme.typography.body1,
+                    color = AppTheme.colors.textSecondary
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        activity?.finish()
+                    }
+                ) {
+                    Text(
+                        text = "Exit",
+                        style = AppTheme.typography.button,
+                        color = AppTheme.colors.error
+                    )
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showExitDialog = false }
+                ) {
+                    Text(
+                        text = "Cancel",
+                        style = AppTheme.typography.button,
+                        color = AppTheme.colors.primary
+                    )
+                }
+            },
+            containerColor = AppTheme.colors.surface,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 
@@ -656,7 +712,7 @@ private fun AnimatedClientBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
-                        imageVector = Icons.Default.EventNote,
+                        imageVector = Icons.Default.Handshake,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )

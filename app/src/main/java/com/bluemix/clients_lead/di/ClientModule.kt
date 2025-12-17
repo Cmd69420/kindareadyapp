@@ -29,7 +29,8 @@ val clientModule = module {
         ClientsViewModel(
             getAllClients = get(),
             tokenStorage = get(),
-            getCurrentUserId = get()
+            getCurrentUserId = get(),
+            locationTrackingStateManager = get()
         )
     }
 
