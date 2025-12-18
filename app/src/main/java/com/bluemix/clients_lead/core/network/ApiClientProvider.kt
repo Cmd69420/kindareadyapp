@@ -9,10 +9,6 @@ import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 
-/**
- * Creates and configures the Ktor HttpClient
- * Replaces SupabaseClientProvider
- */
 object ApiClientProvider {
 
     fun create(

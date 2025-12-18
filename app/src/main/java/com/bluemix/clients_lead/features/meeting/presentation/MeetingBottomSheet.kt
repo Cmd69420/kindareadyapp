@@ -21,17 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.model.Meeting
 import ui.AppTheme
-import ui.components.Button
 import ui.components.Icon
 import ui.components.IconButton
 import ui.components.Text
-import ui.components.textfield.OutlinedTextField
+import com.bluemix.clients_lead.core.design.ui.components.textfield.OutlinedTextField
 import java.time.Duration
 import java.time.Instant
 

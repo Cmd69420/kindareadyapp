@@ -178,10 +178,15 @@ fun ClientDetailScreen(
                             context.startActivity(intent)
                         },
                         onNavigate = { lat, lng ->
-                            val uri = Uri.parse("geo:$lat,$lng?q=$lat,$lng")
-                            val intent = Intent(Intent.ACTION_VIEW, uri)
+                            val uri = Uri.parse(
+                                "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng"
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                                setPackage("com.google.android.apps.maps")
+                            }
                             context.startActivity(intent)
                         }
+
                     )
                 }
             }

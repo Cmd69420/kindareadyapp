@@ -1,4 +1,4 @@
-package ui.components.textfield
+package com.bluemix.clients_lead.core.design.ui.components.textfield
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.InteractionSource
@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import ui.AppTheme
 import ui.components.textfield.base.CommonDecorationBox
 import ui.components.textfield.base.FocusedOutlineThickness
@@ -322,8 +323,8 @@ object OutlinedTextFieldDefaults {
     @Composable
     fun colors(): TextFieldColors {
         return TextFieldColors(
-            focusedTextColor = AppTheme.colors.text,
-            unfocusedTextColor = AppTheme.colors.text,
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
             disabledTextColor = AppTheme.colors.onDisabled,
             errorTextColor = AppTheme.colors.text,
             focusedContainerColor = AppTheme.colors.transparent,

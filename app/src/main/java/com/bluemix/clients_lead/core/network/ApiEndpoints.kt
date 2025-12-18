@@ -4,6 +4,8 @@ package com.bluemix.clients_lead.core.network
  * Central API endpoint definitions
  * All backend routes are defined here for easy maintenance
  */
+
+//https://client-backend-wm7s.onrender.com
 object ApiEndpoints {
 
     const val BASE_URL = "https://geo-track-1.onrender.com"

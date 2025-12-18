@@ -35,10 +35,8 @@ import com.bluemix.clients_lead.features.expense.vm.TripExpenseViewModel
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
-import ui.components.Button
-import ui.components.ButtonVariant
 import ui.components.Text
-import ui.components.textfield.OutlinedTextField
+import com.bluemix.clients_lead.core.design.ui.components.textfield.OutlinedTextField
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

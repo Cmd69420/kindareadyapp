@@ -19,6 +19,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import android.app.Activity
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.features.expense.presentation.TripExpenseSheet
@@ -555,13 +558,12 @@ private fun TrackingRequiredOverlay(
     onRefreshStatus: () -> Unit
 ) {
     Box(
-        modifier = modifier
-            .background(AppTheme.colors.background.copy(alpha = 0.95f))
+        modifier = modifier.background(Color.Black),
+        contentAlignment = Alignment.TopCenter
     ) {
         Column(
             modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 24.dp),
+                .padding(top = 120.dp, start = 24.dp, end = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -569,20 +571,21 @@ private fun TrackingRequiredOverlay(
                 imageVector = Icons.Default.LocationOff,
                 contentDescription = null,
                 modifier = Modifier.size(52.dp),
-                tint = AppTheme.colors.primary
+                tint = Color(0xFF5E92F3)
             )
 
             Text(
                 text = "Location tracking required",
                 style = AppTheme.typography.h3,
-                color = AppTheme.colors.text,
+                color = Color.White,
                 textAlign = TextAlign.Center
             )
 
+            // Shortened description
             Text(
-                text = "To protect client data and verify that you are in the correct area, background location tracking must remain active while using the map.",
+                text = "Background location access is required to show nearby clients and verify your working area.",
                 style = AppTheme.typography.body2,
-                color = AppTheme.colors.textSecondary,
+                color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
             )
 
@@ -591,17 +594,21 @@ private fun TrackingRequiredOverlay(
                 horizontalAlignment = Alignment.Start,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                TrackingBenefitItem("Verify that you are in the correct service area")
-                TrackingBenefitItem("Show clients that are actually near your location")
-                TrackingBenefitItem("Securely track field visits for compliance")
-                TrackingBenefitItem("Prevent unauthorized access to sensitive client data")
+                TrackingBenefitItem("Verify you are in the correct service area")
+                TrackingBenefitItem("Show clients near your location")
+                TrackingBenefitItem("Securely log field visits")
+                TrackingBenefitItem("Prevent unauthorized access")
             }
 
             Button(
                 onClick = onEnableTracking,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = 12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF5E92F3),
+                    contentColor = Color.White
+                )
             ) {
                 Text(
                     text = "Enable Location Tracking",
@@ -611,24 +618,37 @@ private fun TrackingRequiredOverlay(
 
             OutlinedButton(
                 onClick = onRefreshStatus,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    Color.White.copy(alpha = 0.35f)
+                )
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
+                    tint = Color.White
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Refresh tracking status",
-                    style = AppTheme.typography.button
+                    style = AppTheme.typography.button,
+                    color = Color.White
                 )
             }
 
+
+            // Shortened footer
             Text(
-                text = "We only use your location to verify your working area and log visits. Your data is transmitted securely and never shared with other users.",
+                text = "Your location is used only to verify visits and is never shared.",
                 style = AppTheme.typography.body2,
-                color = AppTheme.colors.textSecondary,
+                color = Color.White.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp)
             )
@@ -639,22 +659,24 @@ private fun TrackingRequiredOverlay(
 @Composable
 private fun TrackingBenefitItem(text: String) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(AppTheme.colors.primary)
+        Text(
+            text = "•",
+            style = AppTheme.typography.body1,
+            color = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.padding(end = 8.dp)
         )
+
         Text(
             text = text,
             style = AppTheme.typography.body2,
-            color = AppTheme.colors.textSecondary
+            color = Color.White.copy(alpha = 0.75f)
         )
     }
 }
+
 
 @Composable
 private fun AnimatedClientBottomSheet(

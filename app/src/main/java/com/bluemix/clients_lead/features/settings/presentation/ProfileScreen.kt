@@ -718,22 +718,17 @@ private fun AnimatedDangerZone(onSignOutClick: () -> Unit) {
         )
 
         Button(
-            variant = ButtonVariant.DestructiveOutlined,
+            variant = ButtonVariant.Destructive,
             onClick = onSignOutClick,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                imageVector = Icons.Default.Logout,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Sign Out",
-                style = AppTheme.typography.button,
-                color = AppTheme.colors.error
+                style = AppTheme.typography.button
             )
         }
+
     }
 }
 
@@ -750,6 +745,8 @@ private fun AnimatedLogoutDialog(
     ) {
         AlertDialog(
             onDismissRequest = onDismiss,
+            containerColor = AppTheme.colors.surface,
+            tonalElevation = 0.dp,
             icon = {
                 Icon(
                     imageVector = Icons.Default.Logout,
@@ -795,6 +792,7 @@ private fun AnimatedLogoutDialog(
                 }
             }
         )
+
     }
 }
 
