@@ -20,16 +20,13 @@ import kotlinx.serialization.Serializable
 import android.util.Log
 import io.ktor.http.HttpHeaders
 
-/**
- * Updated ClientRepository using REST API instead of Supabase
- */
 class ClientRepositoryImpl(
     private val httpClient: HttpClient
 ) : IClientRepository {
 
     override suspend fun getAllClients(userId: String): AppResult<List<Client>> =
         withContext(Dispatchers.IO) {
-            Log.d("CLIENT_REPO", "🔍 Fetching clients...")
+            Log.d("CLIENT_REPO", "📋 Fetching clients...")
 
             runAppCatching(mapper = { it.toAppError() }) {
                 Log.d("CLIENT_REPO", "📡 Making request to: ${ApiEndpoints.BASE_URL}${ApiEndpoints.Clients.BASE}")
@@ -60,7 +57,6 @@ class ClientRepositoryImpl(
             runAppCatching(mapper = { it.toAppError() }) {
                 val response = httpClient.get(ApiEndpoints.Clients.BASE).body<ClientsResponse>()
 
-                // Filter clients that have location (latitude and longitude not null)
                 response.clients
                     .filter { it.latitude != null && it.longitude != null }
                     .map { it.toClientDto() }
@@ -83,10 +79,40 @@ class ClientRepositoryImpl(
         query: String
     ): AppResult<List<Client>> = withContext(Dispatchers.IO) {
         runAppCatching(mapper = { it.toAppError() }) {
+            Log.d("CLIENT_REPO", "🔍 Local search: $query")
+
             val response = httpClient.get(ApiEndpoints.Clients.BASE) {
                 parameter("search", query)
+                parameter("searchMode", "local") // ✅ Explicitly set local mode
             }.body<ClientsResponse>()
 
+            Log.d("CLIENT_REPO", "✅ Found ${response.clients.size} local clients")
+            response.clients.map { it.toClientDto() }.toDomain()
+        }
+    }
+
+    // ✅ NEW: Remote search across all pincodes with optional filters
+    override suspend fun searchRemoteClients(
+        userId: String,
+        query: String,
+        filterType: String?,
+        filterValue: String?
+    ): AppResult<List<Client>> = withContext(Dispatchers.IO) {
+        runAppCatching(mapper = { it.toAppError() }) {
+            Log.d("CLIENT_REPO", "🌐 Remote search: query='$query', filterType='$filterType', filterValue='$filterValue'")
+
+            val response = httpClient.get(ApiEndpoints.Clients.BASE) {
+                parameter("search", query)
+                parameter("searchMode", "remote") // Remote mode - no pincode filter
+
+                // ✅ Add optional filters
+                if (filterType != null && filterValue != null) {
+                    parameter("filterType", filterType)
+                    parameter("filterValue", filterValue)
+                }
+            }.body<ClientsResponse>()
+
+            Log.d("CLIENT_REPO", "✅ Found ${response.clients.size} remote clients")
             response.clients.map { it.toClientDto() }.toDomain()
         }
     }
@@ -123,7 +149,9 @@ class ClientRepositoryImpl(
 @Serializable
 data class ClientsResponse(
     val clients: List<BackendClient>,
-    val pagination: PaginationData? = null
+    val pagination: PaginationData? = null,
+    val userPincode: String? = null, // ✅ Backend returns current user pincode
+    val filteredByPincode: Boolean? = null // ✅ Indicates if pincode filter was applied
 )
 
 @Serializable
@@ -140,6 +168,7 @@ data class BackendClient(
     val address: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val pincode: String? = null, // ✅ Added pincode field
     val status: String? = null,
     val notes: String? = null,
     val createdBy: String? = null,
@@ -157,9 +186,6 @@ data class PaginationData(
 
 // ==================== Mapping Functions ====================
 
-/**
- * Convert backend client model to app's ClientDto
- */
 fun BackendClient.toClientDto(): ClientDto {
     return ClientDto(
         id = this.id,
@@ -175,6 +201,5 @@ fun BackendClient.toClientDto(): ClientDto {
         createdAt = this.createdAt ?: "",
         hasLocation = (this.latitude != null && this.longitude != null),
         updatedAt = this.updatedAt ?: ""
-
     )
 }

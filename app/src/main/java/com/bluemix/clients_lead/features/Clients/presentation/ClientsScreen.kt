@@ -1,75 +1,25 @@
 package com.bluemix.clients_lead.features.Clients.presentation
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.unit.dp as Dp
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import com.bluemix.clients_lead.features.Clients.vm.ClientDetailViewModel
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.LocationOff
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonOff
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -81,8 +31,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
-import com.bluemix.clients_lead.features.Clients.vm.ClientFilter
-import com.bluemix.clients_lead.features.Clients.vm.ClientsViewModel
+import com.bluemix.clients_lead.features.Clients.vm.*
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
 import ui.components.progressindicators.CircularProgressIndicator
@@ -100,16 +49,12 @@ fun ClientsScreen(
     var showSearchBar by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    // File picker launcher
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let {
-            viewModel.uploadExcelFile(context, it)
-        }
+        uri?.let { viewModel.uploadExcelFile(context, it) }
     }
 
-    // Auto-clear error/success message after 3 seconds
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             kotlinx.coroutines.delay(3000)
@@ -141,10 +86,7 @@ fun ClientsScreen(
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Search button
-                        IconButton(
-                            onClick = { showSearchBar = !showSearchBar }
-                        ) {
+                        IconButton(onClick = { showSearchBar = !showSearchBar }) {
                             Icon(
                                 imageVector = if (showSearchBar) Icons.Default.Close else Icons.Default.Search,
                                 contentDescription = if (showSearchBar) "Close search" else "Search",
@@ -152,11 +94,8 @@ fun ClientsScreen(
                             )
                         }
 
-                        // Upload button with loading state
                         IconButton(
-                            onClick = {
-                                launcher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                            },
+                            onClick = { launcher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") },
                             enabled = !uiState.isLoading
                         ) {
                             if (uiState.isLoading) {
@@ -174,7 +113,6 @@ fun ClientsScreen(
                             }
                         }
 
-                        // Refresh button
                         var isRefreshing by remember { mutableStateOf(false) }
                         val rotation by animateFloatAsState(
                             targetValue = if (isRefreshing) 360f else 0f,
@@ -202,7 +140,6 @@ fun ClientsScreen(
             }
         },
         snackbarHost = {
-            // Show error/success message at bottom
             AnimatedVisibility(
                 visible = uiState.error != null,
                 enter = fadeIn() + expandVertically(),
@@ -216,8 +153,7 @@ fun ClientsScreen(
                         .background(
                             if (uiState.error?.contains("success", ignoreCase = true) == true)
                                 Color(0xFF4CAF50)
-                            else
-                                Color(0xFFFF5252)
+                            else Color(0xFFFF5252)
                         )
                         .padding(16.dp)
                 ) {
@@ -232,9 +168,7 @@ fun ClientsScreen(
                             color = Color.White,
                             modifier = Modifier.weight(1f)
                         )
-                        IconButton(
-                            onClick = { viewModel.clearError() }
-                        ) {
+                        IconButton(onClick = { viewModel.clearError() }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Dismiss",
@@ -253,39 +187,90 @@ fun ClientsScreen(
                     .padding(paddingValues)
                     .background(Color(0xFF000000))
             ) {
-                // Animated Search Field
+                // Search mode toggle and search field
                 AnimatedVisibility(
                     visible = showSearchBar,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
-                    TextField(
-                        value = uiState.searchQuery,
-                        onValueChange = { viewModel.searchClients(it) },
-                        placeholder = { Text("Search clients...", color = Color(0xFF808080)) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        trailingIcon = {
-                            AnimatedVisibility(
-                                visible = uiState.searchQuery.isNotEmpty(),
-                                enter = scaleIn() + fadeIn(),
-                                exit = scaleOut() + fadeOut()
-                            ) {
-                                IconButton(onClick = { viewModel.searchClients("") }) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Search mode toggle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SearchModeButton(
+                                label = "Local",
+                                icon = Icons.Default.MyLocation,
+                                selected = uiState.searchMode == SearchMode.LOCAL,
+                                onClick = { viewModel.setSearchMode(SearchMode.LOCAL) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            SearchModeButton(
+                                label = "Remote",
+                                icon = Icons.Default.Public,
+                                selected = uiState.searchMode == SearchMode.REMOTE,
+                                onClick = { viewModel.setSearchMode(SearchMode.REMOTE) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // Search text field
+                        TextField(
+                            value = uiState.searchQuery,
+                            onValueChange = { viewModel.searchClients(it) },
+                            placeholder = {
+                                Text(
+                                    text = when (uiState.searchMode) {
+                                        SearchMode.LOCAL -> "Search in current area..."
+                                        SearchMode.REMOTE -> "Search pincode, city, or name..."
+                                    },
+                                    color = Color(0xFF808080)
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            leadingIcon = {
+                                if (uiState.isSearching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color(0xFF5E92F3),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
                                     Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear",
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
                                         tint = Color(0xFF808080)
                                     )
                                 }
+                            },
+                            trailingIcon = {
+                                AnimatedVisibility(
+                                    visible = uiState.searchQuery.isNotEmpty(),
+                                    enter = scaleIn() + fadeIn(),
+                                    exit = scaleOut() + fadeOut()
+                                ) {
+                                    IconButton(onClick = { viewModel.searchClients("") }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = Color(0xFF808080)
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
 
-                // Filter Chips with scroll animation
-                AnimatedVisibility(visible = uiState.isTrackingEnabled) {
+                // Filter Chips (Local mode only)
+                AnimatedVisibility(
+                    visible = uiState.isTrackingEnabled && uiState.searchMode == SearchMode.LOCAL
+                ) {
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -309,15 +294,55 @@ fun ClientsScreen(
                     }
                 }
 
-                // Content with crossfade
+                // ✅ Distance sort toggle (Local mode only)
+                AnimatedVisibility(
+                    visible = uiState.isTrackingEnabled &&
+                            uiState.searchMode == SearchMode.LOCAL &&
+                            uiState.filteredClients.isNotEmpty()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Sort:",
+                            style = AppTheme.typography.body2,
+                            color = Color(0xFFB0B0B0)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (uiState.sortByDistance) Color(0xFF5E92F3) else Color(0xFF2A2A2A))
+                                .clickable { viewModel.toggleDistanceSort() }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Navigation,
+                                contentDescription = null,
+                                tint = if (uiState.sortByDistance) Color.White else Color(0xFF808080),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (uiState.sortByDistance) "Nearest First" else "Default",
+                                style = AppTheme.typography.label1,
+                                color = if (uiState.sortByDistance) Color.White else Color(0xFF808080)
+                            )
+                        }
+                    }
+                }
+
+                // Content
                 Crossfade(
                     targetState = when {
                         uiState.isLoading -> "loading"
-                        uiState.error != null && !uiState.error!!.contains(
-                            "success",
-                            ignoreCase = true
-                        ) -> "error"
-
+                        uiState.error != null && !uiState.error!!.contains("success", ignoreCase = true) -> "error"
+                        uiState.searchMode == SearchMode.REMOTE && uiState.searchQuery.isNotBlank() -> "remote_results"
                         uiState.filteredClients.isEmpty() -> "empty"
                         else -> "content"
                     },
@@ -330,21 +355,29 @@ fun ClientsScreen(
                             error = uiState.error ?: "Unknown error",
                             onRetry = { viewModel.refresh() }
                         )
-
+                        "remote_results" -> ClientsList(
+                            clients = uiState.remoteResults,
+                            onClientClick = onNavigateToDetail,
+                            isRemote = true,
+                            userLocation = uiState.userLocation,
+                            showDistance = true
+                        )
                         "empty" -> EmptyContent(
                             searchQuery = uiState.searchQuery,
-                            filter = uiState.selectedFilter
+                            filter = uiState.selectedFilter,
+                            searchMode = uiState.searchMode
                         )
-
                         "content" -> ClientsList(
                             clients = uiState.filteredClients,
-                            onClientClick = onNavigateToDetail
+                            onClientClick = onNavigateToDetail,
+                            isRemote = false,
+                            userLocation = uiState.userLocation,
+                            showDistance = uiState.sortByDistance
                         )
                     }
                 }
             }
 
-            // Full-screen Tracking Warning Overlay
             if (!uiState.isTrackingEnabled) {
                 TrackingRequiredOverlay(
                     modifier = Modifier.fillMaxSize(),
@@ -352,6 +385,58 @@ fun ClientsScreen(
                     onRefreshStatus = { viewModel.refreshTrackingState() }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchModeButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) Color(0xFF5E92F3) else Color(0xFF2A2A2A),
+        animationSpec = tween(200),
+        label = "searchModeBackgroundColor"
+    )
+
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) Color.White else Color(0xFF808080),
+        animationSpec = tween(200),
+        label = "searchModeContentColor"
+    )
+
+    Box(
+        modifier = modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(backgroundColor)
+            .clickable(
+                onClick = onClick,
+                indication = ripple(),
+                interactionSource = remember { MutableInteractionSource() }
+            )
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = label,
+                style = AppTheme.typography.button,
+                color = contentColor
+            )
         }
     }
 }
@@ -403,13 +488,27 @@ private fun AnimatedFilterChip(
 @Composable
 private fun ClientsList(
     clients: List<Client>,
-    onClientClick: (String) -> Unit
+    onClientClick: (String) -> Unit,
+    isRemote: Boolean = false,
+    userLocation: Pair<Double, Double>?,
+    showDistance: Boolean = false
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (isRemote && clients.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Found ${clients.size} client${if (clients.size != 1) "s" else ""} • Sorted by distance",
+                    style = AppTheme.typography.body2,
+                    color = Color(0xFF5E92F3),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+        }
+
         itemsIndexed(
             items = clients,
             key = { _, client -> client.id }
@@ -417,7 +516,9 @@ private fun ClientsList(
             AnimatedClientCard(
                 client = client,
                 index = index,
-                onClick = { onClientClick(client.id) }
+                onClick = { onClientClick(client.id) },
+                showDistance = showDistance,
+                userLocation = userLocation
             )
         }
     }
@@ -427,7 +528,9 @@ private fun ClientsList(
 private fun AnimatedClientCard(
     client: Client,
     index: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    showDistance: Boolean = false,
+    userLocation: Pair<Double, Double>? = null
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -467,12 +570,10 @@ private fun AnimatedClientCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status Icon with pulse animation
             AnimatedStatusIcon(status = client.status)
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Client Info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = client.name,
@@ -496,11 +597,33 @@ private fun AnimatedClientCard(
                     )
                 }
 
-                // Location badge with animation
+                // ✅ Distance indicator
+                if (showDistance && userLocation != null) {
+                    val distance = client.formatDistance(userLocation.first, userLocation.second)
+                    distance?.let {
+                        Row(
+                            modifier = Modifier.padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Navigation,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = Color(0xFF5E92F3)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = it,
+                                style = AppTheme.typography.label3,
+                                color = Color(0xFF5E92F3)
+                            )
+                        }
+                    }
+                }
+
                 AnimatedLocationBadge(hasLocation = client.hasLocation)
             }
 
-            // Animated arrow
             val arrowRotation by animateFloatAsState(
                 targetValue = if (isPressed) -45f else 0f,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -647,7 +770,11 @@ private fun ErrorContent(error: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun EmptyContent(searchQuery: String, filter: ClientFilter) {
+private fun EmptyContent(
+    searchQuery: String,
+    filter: ClientFilter,
+    searchMode: SearchMode
+) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -663,10 +790,13 @@ private fun EmptyContent(searchQuery: String, filter: ClientFilter) {
                 tint = Color(0xFF808080)
             )
             Text(
-                text = if (searchQuery.isNotEmpty()) {
-                    "No clients found matching\n\"$searchQuery\""
-                } else {
-                    "No ${filter.name.lowercase()} clients"
+                text = when {
+                    searchQuery.isNotEmpty() && searchMode == SearchMode.REMOTE ->
+                        "No clients found matching\n\"$searchQuery\""
+                    searchQuery.isNotEmpty() ->
+                        "No clients found matching\n\"$searchQuery\""
+                    else ->
+                        "No ${filter.name.lowercase()} clients"
                 },
                 style = AppTheme.typography.body1,
                 color = Color(0xFFB0B0B0),
@@ -676,7 +806,6 @@ private fun EmptyContent(searchQuery: String, filter: ClientFilter) {
     }
 }
 
-// Tracking Required Overlay
 @Composable
 private fun TrackingRequiredOverlay(
     modifier: Modifier = Modifier,

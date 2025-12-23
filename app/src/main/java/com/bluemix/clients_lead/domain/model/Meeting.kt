@@ -51,7 +51,8 @@ data class UpdateMeetingRequest(
     val status: String? = "COMPLETED",
     val comments: String? = null,
     val attachments: List<String>? = null,
+    val clientStatus: String? = null, // ✅ NEW: Update client status (active/inactive/completed)
     val latitude: Double? = null,
-    val longitude: Double? = null,  // ← This was missing
-    val accuracy: Double? = null     // ← This was missing
+    val longitude: Double? = null,
+    val accuracy: Double? = null
 )

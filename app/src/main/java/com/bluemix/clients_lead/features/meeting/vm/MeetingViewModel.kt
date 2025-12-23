@@ -37,9 +37,6 @@ class MeetingViewModel(
 
     private val locationManager = LocationManager(context)
 
-    /**
-     * Check if there's an active meeting for a client
-     */
     fun checkActiveMeeting(clientId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -63,9 +60,6 @@ class MeetingViewModel(
         }
     }
 
-    /**
-     * Start a new meeting
-     */
     fun startMeeting(
         clientId: String,
         latitude: Double?,
@@ -96,10 +90,11 @@ class MeetingViewModel(
     }
 
     /**
-     * End the current meeting with location capture
+     * ✅ UPDATED: End meeting with client status update
      */
     fun endMeeting(
         comments: String?,
+        clientStatus: String, // ✅ NEW: Client status (active/inactive/completed)
         attachmentUris: List<Uri>
     ) {
         viewModelScope.launch {
@@ -157,17 +152,18 @@ class MeetingViewModel(
                 )
             }
 
-            // End the meeting with comments, attachments, and location
+            // ✅ End meeting with comments, attachments, location, AND client status
             when (val result = endMeeting.invoke(
                 meetingId = meeting.id,
                 comments = comments,
                 attachments = uploadedUrls.ifEmpty { null },
+                clientStatus = clientStatus, // ✅ NEW
                 latitude = endLatitude,
                 longitude = endLongitude,
                 accuracy = endAccuracy
             )) {
                 is AppResult.Success -> {
-                    Timber.d("Meeting ended successfully: ${result.data.id}")
+                    Timber.d("Meeting ended successfully: ${result.data.id} | Client status: $clientStatus")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         activeMeeting = null,
@@ -185,9 +181,6 @@ class MeetingViewModel(
         }
     }
 
-    /**
-     * Upload a single attachment
-     */
     private suspend fun uploadAttachment(meetingId: String, uri: Uri): AppResult<String> {
         return try {
             val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
@@ -216,16 +209,10 @@ class MeetingViewModel(
         }
     }
 
-    /**
-     * Clear any error messages
-     */
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    /**
-     * Reset meeting state
-     */
     fun resetMeetingState() {
         _uiState.value = MeetingUiState()
     }

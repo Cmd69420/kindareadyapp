@@ -31,3 +31,16 @@ class SearchClients(
     suspend operator fun invoke(userId: String, query: String): AppResult<List<Client>> =
         repository.searchClients(userId, query)
 }
+
+// ✅ NEW: Remote search use case with filters
+class SearchRemoteClients(
+    private val repository: IClientRepository
+) {
+    suspend operator fun invoke(
+        userId: String,
+        query: String,
+        filterType: String? = null,
+        filterValue: String? = null
+    ): AppResult<List<Client>> =
+        repository.searchRemoteClients(userId, query, filterType, filterValue)
+}

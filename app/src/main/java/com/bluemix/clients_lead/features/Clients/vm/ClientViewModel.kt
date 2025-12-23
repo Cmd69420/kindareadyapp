@@ -11,6 +11,7 @@ import com.bluemix.clients_lead.core.network.TokenStorage
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.usecases.GetAllClients
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
+import com.bluemix.clients_lead.domain.usecases.SearchRemoteClients
 import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
@@ -27,34 +28,65 @@ enum class ClientFilter {
     ALL, ACTIVE, INACTIVE, COMPLETED
 }
 
+enum class SearchMode {
+    LOCAL,   // Search within current pincode
+    REMOTE   // Search across all pincodes
+}
+
+// ✅ SIMPLIFIED: Only need one sort toggle for local mode
 data class ClientsUiState(
     val isLoading: Boolean = false,
     val clients: List<Client> = emptyList(),
     val filteredClients: List<Client> = emptyList(),
     val selectedFilter: ClientFilter = ClientFilter.ACTIVE,
     val searchQuery: String = "",
-    val isTrackingEnabled: Boolean = false,  // ✅ Added tracking state
+    val searchMode: SearchMode = SearchMode.LOCAL,
+    val remoteResults: List<Client> = emptyList(),
+    val sortByDistance: Boolean = false, // ✅ Simple toggle for local mode
+    val userLocation: Pair<Double, Double>? = null,
+    val isSearching: Boolean = false,
+    val isTrackingEnabled: Boolean = false,
     val error: String? = null
 )
 
 class ClientsViewModel(
     private val getAllClients: GetAllClients,
+    private val searchRemoteClients: SearchRemoteClients,
     private val tokenStorage: TokenStorage,
     private val getCurrentUserId: GetCurrentUserId,
-    private val locationTrackingStateManager: LocationTrackingStateManager  // ✅ Inject tracking manager
+    private val locationTrackingStateManager: LocationTrackingStateManager,
+    private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ClientsUiState())
     val uiState: StateFlow<ClientsUiState> = _uiState.asStateFlow()
 
+    private val locationManager = com.bluemix.clients_lead.features.location.LocationManager(context)
+
     init {
         observeTrackingState()
         refreshTrackingState()
+        fetchUserLocation()
     }
 
-    /**
-     * ✅ Observe tracking state changes and enforce security rules
-     */
+    private fun fetchUserLocation() {
+        viewModelScope.launch {
+            try {
+                if (locationManager.hasLocationPermission() && locationManager.isLocationEnabled()) {
+                    val location = locationManager.getLastKnownLocation()
+                    location?.let {
+                        _uiState.value = _uiState.value.copy(
+                            userLocation = Pair(it.latitude, it.longitude)
+                        )
+                        Timber.d("User location: ${it.latitude}, ${it.longitude}")
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get user location")
+            }
+        }
+    }
+
     private fun observeTrackingState() {
         viewModelScope.launch {
             locationTrackingStateManager.trackingState.collect { isTracking ->
@@ -65,33 +97,26 @@ class ClientsViewModel(
                 )
 
                 if (!isTracking) {
-                    // ✅ Security: Clear clients immediately when tracking stops
                     Timber.d("Tracking disabled. Clearing clients from UI state.")
                     _uiState.value = _uiState.value.copy(
                         clients = emptyList(),
                         filteredClients = emptyList(),
+                        remoteResults = emptyList(),
                         isLoading = false,
                         error = null
                     )
                 } else {
-                    // ✅ Tracking just became active → load clients
                     loadClients()
                 }
             }
         }
     }
 
-    /**
-     * ✅ Refresh tracking state from system
-     */
     fun refreshTrackingState() {
         Timber.d("ClientsViewModel: refreshing tracking state from system")
         locationTrackingStateManager.updateTrackingState()
     }
 
-    /**
-     * ✅ Enable tracking from UI
-     */
     fun enableTracking() {
         viewModelScope.launch {
             Timber.d("ClientsViewModel: enableTracking() requested from UI")
@@ -99,9 +124,6 @@ class ClientsViewModel(
         }
     }
 
-    /**
-     * ✅ Load clients only if tracking is enabled
-     */
     fun loadClients() {
         viewModelScope.launch {
             val isTracking = locationTrackingStateManager.isCurrentlyTracking()
@@ -135,18 +157,23 @@ class ClientsViewModel(
                 is AppResult.Success -> {
                     val clients = result.data
                     Timber.d("Successfully loaded ${clients.size} clients")
+
+                    // ✅ Apply sorting if enabled
+                    val sorted = if (_uiState.value.sortByDistance) {
+                        sortClientsByDistance(clients)
+                    } else {
+                        clients
+                    }
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        clients = clients,
-                        filteredClients = filterClients(clients, ClientFilter.ACTIVE, "")
+                        clients = sorted,
+                        filteredClients = filterClients(sorted, ClientFilter.ACTIVE, "")
                     )
                 }
 
                 is AppResult.Error -> {
-                    Timber.e(
-                        result.error.message,
-                        "Failed to load clients: ${result.error.message}"
-                    )
+                    Timber.e(result.error.message, "Failed to load clients: ${result.error.message}")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = result.error.message ?: "Failed to load clients"
@@ -168,16 +195,125 @@ class ClientsViewModel(
         )
     }
 
-    fun searchClients(query: String) {
-        val filtered = filterClients(
-            _uiState.value.clients,
-            _uiState.value.selectedFilter,
-            query
-        )
+    fun setSearchMode(mode: SearchMode) {
+        Timber.d("Switching search mode to: $mode")
         _uiState.value = _uiState.value.copy(
-            searchQuery = query,
-            filteredClients = filtered
+            searchMode = mode,
+            searchQuery = "",
+            remoteResults = emptyList(),
+            sortByDistance = false // Reset sort when switching modes
         )
+    }
+
+    // ✅ SIMPLIFIED: Toggle distance sorting for LOCAL mode
+    fun toggleDistanceSort() {
+        val newValue = !_uiState.value.sortByDistance
+        Timber.d("Toggle distance sort: $newValue")
+
+        _uiState.value = _uiState.value.copy(
+            sortByDistance = newValue
+        )
+
+        // Re-apply current filter with new sort
+        if (_uiState.value.searchMode == SearchMode.LOCAL) {
+            val sorted = if (newValue) {
+                sortClientsByDistance(_uiState.value.clients)
+            } else {
+                _uiState.value.clients
+            }
+
+            val filtered = filterClients(
+                sorted,
+                _uiState.value.selectedFilter,
+                _uiState.value.searchQuery
+            )
+
+            _uiState.value = _uiState.value.copy(
+                filteredClients = filtered
+            )
+        }
+    }
+
+    fun searchClients(query: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                searchQuery = query,
+                isSearching = query.isNotBlank() && _uiState.value.searchMode == SearchMode.REMOTE
+            )
+
+            when (_uiState.value.searchMode) {
+                SearchMode.LOCAL -> {
+                    // Local search: filter existing clients
+                    val filtered = filterClients(
+                        _uiState.value.clients,
+                        _uiState.value.selectedFilter,
+                        query
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        filteredClients = filtered,
+                        isSearching = false
+                    )
+                }
+
+                SearchMode.REMOTE -> {
+                    // Remote search: query backend with smart detection
+                    if (query.isBlank()) {
+                        _uiState.value = _uiState.value.copy(
+                            remoteResults = emptyList(),
+                            isSearching = false
+                        )
+                        return@launch
+                    }
+
+                    val userId = getCurrentUserId()
+                    if (userId == null) {
+                        _uiState.value = _uiState.value.copy(
+                            isSearching = false,
+                            error = "User not authenticated"
+                        )
+                        return@launch
+                    }
+
+                    Timber.d("Performing remote search: '$query'")
+
+                    // ✅ Backend will auto-detect if it's pincode or text
+                    when (val result = searchRemoteClients(userId, query, null, null)) {
+                        is AppResult.Success -> {
+                            Timber.d("Remote search found ${result.data.size} clients")
+
+                            // ✅ ALWAYS sort remote results by distance
+                            val sorted = sortClientsByDistance(result.data)
+
+                            _uiState.value = _uiState.value.copy(
+                                remoteResults = sorted,
+                                isSearching = false
+                            )
+                        }
+
+                        is AppResult.Error -> {
+                            Timber.e("Remote search failed: ${result.error.message}")
+                            _uiState.value = _uiState.value.copy(
+                                isSearching = false,
+                                error = "Search failed: ${result.error.message}"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ✅ Sort clients by distance from user
+    private fun sortClientsByDistance(clients: List<Client>): List<Client> {
+        val userLoc = _uiState.value.userLocation
+        if (userLoc == null) {
+            Timber.w("Cannot sort by distance: user location not available")
+            return clients
+        }
+
+        return clients.sortedBy { client ->
+            client.distanceFrom(userLoc.first, userLoc.second) ?: Double.MAX_VALUE
+        }
     }
 
     private fun filterClients(
@@ -217,7 +353,6 @@ class ClientsViewModel(
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
                 Timber.d("📂 Starting Excel upload...")
 
-                // Read file bytes
                 val inputStream = context.contentResolver.openInputStream(uri)
                 if (inputStream == null) {
                     Timber.e("❌ Failed to open file stream")
@@ -232,7 +367,6 @@ class ClientsViewModel(
                 inputStream.close()
                 Timber.d("📦 File size: ${fileBytes.size} bytes")
 
-                // Get token
                 val token = tokenStorage.getToken()
                 if (token == null) {
                     Timber.e("❌ No auth token found")
@@ -243,13 +377,11 @@ class ClientsViewModel(
                     return@launch
                 }
 
-                // Create HTTP client
                 val client = ApiClientProvider.create(
                     baseUrl = ApiEndpoints.BASE_URL,
                     tokenStorage = tokenStorage
                 )
 
-                // Upload file
                 val response: HttpResponse = client.submitFormWithBinaryData(
                     url = "${ApiEndpoints.BASE_URL}${ApiEndpoints.Clients.UPLOAD_EXCEL}",
                     formData = formData {
@@ -273,7 +405,6 @@ class ClientsViewModel(
                     error = "File uploaded successfully!"
                 )
 
-                // Refresh clients list after successful upload
                 loadClients()
 
             } catch (e: ClientRequestException) {

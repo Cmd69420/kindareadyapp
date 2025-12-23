@@ -36,8 +36,9 @@ class EndMeeting(
 ) {
     suspend operator fun invoke(
         meetingId: String,
-        comments: String?,
-        attachments: List<String>?,
+        comments: String? = null,
+        attachments: List<String>? = null,
+        clientStatus: String? = null, // ✅ NEW
         latitude: Double? = null,
         longitude: Double? = null,
         accuracy: Double? = null
@@ -46,6 +47,7 @@ class EndMeeting(
             status = "COMPLETED",
             comments = comments,
             attachments = attachments,
+            clientStatus = clientStatus, // ✅ NEW
             latitude = latitude,
             longitude = longitude,
             accuracy = accuracy

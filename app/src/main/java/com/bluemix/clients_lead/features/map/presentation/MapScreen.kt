@@ -291,8 +291,8 @@ fun MapScreen(
                                     accuracy = null
                                 )
                             },
-                            onEndMeeting = { comments, attachments ->
-                                meetingViewModel.endMeeting(comments, attachments)
+                            onEndMeeting = { comments, clientStatus, attachments ->
+                                meetingViewModel.endMeeting(comments, clientStatus, attachments)
                                 showMeetingSheet = false
                                 proximityClient = null
                                 ProximityDetector.resetProximityState(client.id)

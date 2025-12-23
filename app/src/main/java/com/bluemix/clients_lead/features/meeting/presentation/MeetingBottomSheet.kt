@@ -33,18 +33,18 @@ import com.bluemix.clients_lead.core.design.ui.components.textfield.OutlinedText
 import java.time.Duration
 import java.time.Instant
 
-
 @Composable
 fun MeetingBottomSheet(
     client: Client,
     activeMeeting: Meeting?,
     isLoading: Boolean,
     onStartMeeting: () -> Unit,
-    onEndMeeting: (comments: String, attachments: List<Uri>) -> Unit,
+    onEndMeeting: (comments: String, clientStatus: String, attachments: List<Uri>) -> Unit, // ✅ UPDATED
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var comments by remember { mutableStateOf("") }
+    var selectedClientStatus by remember { mutableStateOf(client.status) } // ✅ NEW: Track client status
     var attachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var showEndConfirmation by remember { mutableStateOf(false) }
     var showDismissWarning by remember { mutableStateOf(false) }
@@ -58,7 +58,6 @@ fun MeetingBottomSheet(
     val canDismiss = activeMeeting == null
 
     Box(modifier = Modifier.fillMaxSize()) {
-
         // Dim backdrop
         Box(
             modifier = Modifier
@@ -77,7 +76,7 @@ fun MeetingBottomSheet(
                 )
         )
 
-        // Bottom sheet container - Dark theme
+        // Bottom sheet
         Box(
             modifier = modifier
                 .fillMaxWidth()
@@ -99,7 +98,6 @@ fun MeetingBottomSheet(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-
                 // HEADER
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -137,7 +135,7 @@ fun MeetingBottomSheet(
                     }
                 }
 
-                // Warning message when meeting is active
+                // Warning message
                 AnimatedVisibility(
                     visible = activeMeeting != null,
                     enter = expandVertically() + fadeIn(),
@@ -177,6 +175,76 @@ fun MeetingBottomSheet(
                     MeetingDurationCard(activeMeeting)
                 }
 
+                // ✅ NEW: CLIENT STATUS SELECTOR (only when ending meeting)
+                AnimatedVisibility(
+                    visible = activeMeeting != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Update Client Status",
+                            style = AppTheme.typography.body1,
+                            color = Color.White
+                        )
+
+                        Text(
+                            text = "Current: ${client.status.capitalize()}",
+                            style = AppTheme.typography.body2,
+                            color = Color(0xFFB0B0B0)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ClientStatusChip(
+                                label = "Active",
+                                icon = Icons.Default.Person,
+                                color = Color(0xFF5E92F3),
+                                isSelected = selectedClientStatus == "active",
+                                onClick = { selectedClientStatus = "active" },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            ClientStatusChip(
+                                label = "Completed",
+                                icon = Icons.Default.CheckCircle,
+                                color = Color(0xFF66BB6A),
+                                isSelected = selectedClientStatus == "completed",
+                                onClick = { selectedClientStatus = "completed" },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            ClientStatusChip(
+                                label = "Inactive",
+                                icon = Icons.Default.PersonOff,
+                                color = Color(0xFFEF5350),
+                                isSelected = selectedClientStatus == "inactive",
+                                onClick = { selectedClientStatus = "inactive" },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // Status description
+                        Text(
+                            text = when (selectedClientStatus) {
+                                "active" -> "Client is still in discussion"
+                                "completed" -> "Client is interested / Deal done"
+                                "inactive" -> "Client not interested"
+                                else -> ""
+                            },
+                            style = AppTheme.typography.body3,
+                            color = when (selectedClientStatus) {
+                                "active" -> Color(0xFF5E92F3)
+                                "completed" -> Color(0xFF66BB6A)
+                                "inactive" -> Color(0xFFEF5350)
+                                else -> Color(0xFF808080)
+                            }
+                        )
+                    }
+                }
+
                 // COMMENTS
                 AnimatedVisibility(
                     visible = activeMeeting != null,
@@ -193,7 +261,7 @@ fun MeetingBottomSheet(
                         OutlinedTextField(
                             value = comments,
                             onValueChange = { comments = it },
-                            placeholder = { Text("Add comments about this meeting...") },
+                            placeholder = { Text("Add comments about client requirements...") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 120.dp),
@@ -209,7 +277,6 @@ fun MeetingBottomSheet(
                     exit = shrinkVertically() + fadeOut()
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -228,10 +295,7 @@ fun MeetingBottomSheet(
                                     tint = Color(0xFF5E92F3)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "Add Files",
-                                    color = Color(0xFF5E92F3)
-                                )
+                                Text("Add Files", color = Color(0xFF5E92F3))
                             }
                         }
 
@@ -266,7 +330,7 @@ fun MeetingBottomSheet(
                     text = if (activeMeeting == null)
                         "Starting a meeting will log your visit time and location for this client."
                     else
-                        "Add notes and attachments before ending the meeting. All data will be saved to your meeting history.",
+                        "Update client status, add notes and attachments before ending the meeting.",
                     style = AppTheme.typography.body2,
                     textAlign = TextAlign.Center,
                     color = Color(0xFF808080),
@@ -281,11 +345,13 @@ fun MeetingBottomSheet(
         if (showEndConfirmation) {
             EndMeetingDialog(
                 comments = comments,
+                clientStatus = selectedClientStatus,
+                currentStatus = client.status,
                 attachments = attachments,
                 onCancel = { showEndConfirmation = false },
                 onConfirm = {
                     showEndConfirmation = false
-                    onEndMeeting(comments, attachments)
+                    onEndMeeting(comments, selectedClientStatus, attachments)
                 }
             )
         }
@@ -300,8 +366,45 @@ fun MeetingBottomSheet(
     }
 }
 
+// ✅ NEW: Client Status Chip Component
+@Composable
+private fun ClientStatusChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(64.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) color.copy(alpha = 0.2f) else Color(0xFF0D0D0D))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isSelected) color else Color(0xFF808080),
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                style = AppTheme.typography.label2,
+                color = if (isSelected) color else Color(0xFF808080)
+            )
+        }
+    }
+}
 
-// -------------------- COMPONENTS -------------------------------
+// ============ KEEP ALL OTHER COMPONENTS THE SAME ============
 
 @Composable
 private fun ClientInfoCard(client: Client) {
@@ -313,7 +416,6 @@ private fun ClientInfoCard(client: Client) {
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-
             client.address?.let {
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(
@@ -350,7 +452,6 @@ private fun ClientInfoCard(client: Client) {
         }
     }
 }
-
 
 @Composable
 private fun MeetingActionButton(
@@ -407,8 +508,6 @@ private fun MeetingActionButton(
     }
 }
 
-
-
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 private fun MeetingDurationCard(meeting: Meeting) {
@@ -445,7 +544,6 @@ private fun MeetingDurationCard(meeting: Meeting) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-
             Column {
                 Text(
                     text = "Meeting Duration",
@@ -469,7 +567,6 @@ private fun MeetingDurationCard(meeting: Meeting) {
     }
 }
 
-
 @Composable
 private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
     Box(
@@ -484,7 +581,6 @@ private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
@@ -515,10 +611,12 @@ private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
     }
 }
 
-
+// ✅ UPDATED: End Meeting Dialog with client status
 @Composable
 private fun EndMeetingDialog(
     comments: String,
+    clientStatus: String,
+    currentStatus: String,
     attachments: List<Uri>,
     onCancel: () -> Unit,
     onConfirm: () -> Unit
@@ -537,15 +635,42 @@ private fun EndMeetingDialog(
                 .padding(24.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-
                 Text(
                     text = "End Meeting?",
                     style = AppTheme.typography.h3,
                     color = Color.White
                 )
 
+                if (clientStatus != currentStatus) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF2A2A2A))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Client status will be updated:",
+                                style = AppTheme.typography.body3,
+                                color = Color(0xFFB0B0B0)
+                            )
+                            Text(
+                                text = "${currentStatus.capitalize()} → ${clientStatus.capitalize()}",
+                                style = AppTheme.typography.body1,
+                                color = when (clientStatus) {
+                                    "active" -> Color(0xFF5E92F3)
+                                    "completed" -> Color(0xFF66BB6A)
+                                    "inactive" -> Color(0xFFEF5350)
+                                    else -> Color.White
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Text(
-                    text = "Are you sure you want to end this meeting? Your notes and attachments will be saved.",
+                    text = "Your notes and attachments will be saved.",
                     style = AppTheme.typography.body2,
                     color = Color(0xFFB0B0B0)
                 )
@@ -554,7 +679,6 @@ private fun EndMeetingDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-
                     OutlinedButton(
                         onClick = onCancel,
                         modifier = Modifier.weight(1f),
@@ -581,7 +705,6 @@ private fun EndMeetingDialog(
     }
 }
 
-
 @Composable
 private fun DismissWarningDialog(
     clientName: String,
@@ -601,7 +724,6 @@ private fun DismissWarningDialog(
                 .padding(24.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -639,7 +761,6 @@ private fun DismissWarningDialog(
         }
     }
 }
-
 
 private fun formatDuration(d: Duration): String {
     val hours = d.toHours()

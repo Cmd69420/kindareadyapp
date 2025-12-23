@@ -21,5 +21,6 @@ data class ClientDto(
     @SerialName("created_at")
     val createdAt: String,
     @SerialName("updated_at")
-    val updatedAt: String
+    val updatedAt: String,
+    val pincode: String? = null // ✅ NEW: Add pincode
 )
