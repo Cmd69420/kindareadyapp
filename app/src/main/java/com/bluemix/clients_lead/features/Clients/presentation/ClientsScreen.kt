@@ -43,7 +43,8 @@ import ui.foundation.ripple
 @Composable
 fun ClientsScreen(
     viewModel: ClientsViewModel = koinViewModel(),
-    onNavigateToDetail: (String) -> Unit = {}
+    onNavigateToDetail: (String) -> Unit = {},
+    onNavigateToCreateClient: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showSearchBar by remember { mutableStateOf(false) }
@@ -65,6 +66,18 @@ fun ClientsScreen(
     Scaffold(
         modifier = Modifier.background(Color(0xFF000000)),
         contentWindowInsets = WindowInsets(0),
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToCreateClient,
+                containerColor = Color(0xFF5E92F3),
+                contentColor = Color.White
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Create Client"
+                )
+            }
+        },
         topBar = {
             TopBar(
                 colors = TopBarDefaults.topBarColors(

@@ -32,4 +32,7 @@ sealed class Route {
     // NEW SCREEN FOR EXPENSE FORM
     @Serializable
     data object ExpenseForm : Route()
+
+    @Serializable
+    data object CreateClient : Route()
 }

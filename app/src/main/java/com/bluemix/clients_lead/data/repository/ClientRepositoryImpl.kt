@@ -9,6 +9,7 @@ import com.bluemix.clients_lead.data.models.ClientDto
 import com.bluemix.clients_lead.domain.model.Client
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import com.bluemix.clients_lead.domain.repository.IClientRepository
+import com.bluemix.clients_lead.data.models.CreateClientRequest
 import io.ktor.client.*
 import io.ktor.client.request.forms.formData
 import io.ktor.client.call.*
@@ -114,6 +115,38 @@ class ClientRepositoryImpl(
 
             Log.d("CLIENT_REPO", "✅ Found ${response.clients.size} remote clients")
             response.clients.map { it.toClientDto() }.toDomain()
+        }
+    }
+
+
+
+    override suspend fun createClient(
+        name: String,
+        phone: String?,
+        email: String?,
+        address: String?,
+        pincode: String?,
+        notes: String?
+    ): AppResult<Client> = withContext(Dispatchers.IO) {
+        runAppCatching(mapper = { it.toAppError() }) {
+            Log.d("CLIENT_REPO", "🔨 Creating client: $name")
+
+            val request = CreateClientRequest(
+                name = name,
+                phone = phone,
+                email = email,
+                address = address,
+                pincode = pincode,
+                notes = notes
+            )
+
+            val response = httpClient.post(ApiEndpoints.Clients.CREATE) {
+                setBody(request)
+            }.body<SingleClientResponse>()
+
+            Log.d("CLIENT_REPO", "✅ Client created: ${response.client.id}")
+
+            response.client.toClientDto().toDomain()
         }
     }
 

@@ -2,7 +2,6 @@ package com.bluemix.clients_lead.domain.repository
 
 import com.bluemix.clients_lead.core.common.utils.AppResult
 import com.bluemix.clients_lead.domain.model.Client
-import okhttp3.MultipartBody
 
 /**
  * Repository interface for client data operations.
@@ -53,6 +52,16 @@ interface IClientRepository {
         filterType: String? = null,
         filterValue: String? = null
     ): AppResult<List<Client>>
+
+
+    suspend fun createClient(
+        name: String,
+        phone: String?,
+        email: String?,
+        address: String?,
+        pincode: String?,
+        notes: String?
+    ): AppResult<Client>
 
     /**
      * Upload Excel file with clients

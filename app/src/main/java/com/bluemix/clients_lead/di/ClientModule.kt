@@ -39,6 +39,8 @@ val clientModule = module {
         SearchRemoteClients(repository = get())
     }
 
+    factory { CreateClient(repository = get()) }
+
     // ViewModels
     viewModel {
         ClientsViewModel(
@@ -47,7 +49,8 @@ val clientModule = module {
             tokenStorage = get(),
             getCurrentUserId = get(),
             locationTrackingStateManager = get(),
-            context = get() // ✅ NEW: Inject application context
+            context = get(),
+            createClient = get()// ✅ NEW: Inject application context
         )
     }
 

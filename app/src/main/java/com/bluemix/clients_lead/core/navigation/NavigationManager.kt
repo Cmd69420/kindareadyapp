@@ -46,6 +46,13 @@ class NavigationManager(private val navController: NavController) {
     }
 
     /**
+     * Navigate to create client screen
+     */
+    fun navigateToCreateClient() {
+        navController.navigate(Route.CreateClient)
+    }
+
+    /**
      * Navigate to tab destination with state preservation
      */
     fun navigateToTab(route: Route) {

@@ -44,3 +44,23 @@ class SearchRemoteClients(
     ): AppResult<List<Client>> =
         repository.searchRemoteClients(userId, query, filterType, filterValue)
 }
+
+class CreateClient(
+    private val repository: IClientRepository
+) {
+    suspend operator fun invoke(
+        name: String,
+        phone: String?,
+        email: String?,
+        address: String?,
+        pincode: String?,
+        notes: String?
+    ): AppResult<Client> = repository.createClient(
+        name = name,
+        phone = phone,
+        email = email,
+        address = address,
+        pincode = pincode,
+        notes = notes
+    )
+}

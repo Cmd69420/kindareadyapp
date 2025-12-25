@@ -15,12 +15,12 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.bluemix.clients_lead.features.Clients.presentation.ClientDetailScreen
 import com.bluemix.clients_lead.features.Clients.presentation.ClientsScreen
+import com.bluemix.clients_lead.features.Clients.presentation.CreateClientScreen
 import com.bluemix.clients_lead.features.auth.presentation.screens.AuthScreen
 import com.bluemix.clients_lead.features.auth.vm.SessionViewModel
 import com.bluemix.clients_lead.features.map.presentation.MapScreen
 import com.bluemix.clients_lead.features.settings.presentation.ProfileScreen
 import com.bluemix.clients_lead.features.timesheet.presentation.ActivityScreen
-import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import com.bluemix.clients_lead.features.*
 
@@ -106,6 +106,9 @@ fun AppNavHost() {
                     ClientsScreen(
                         onNavigateToDetail = { clientId ->
                             navigationManager.navigateToClientDetail(clientId)
+                        },
+                        onNavigateToCreateClient = {
+                            navigationManager.navigateToCreateClient()
                         }
                     )
                 }
@@ -142,7 +145,11 @@ fun AppNavHost() {
             }
         }
 
-
+        composable<Route.CreateClient> {
+            CreateClientScreen(
+                onNavigateBack = { navController.navigateUp() }
+            )
+        }
 
         // -------- Detail Screen (No Bottom Bar) --------
         composable<Route.ClientDetail> { backStack ->
@@ -158,8 +165,6 @@ fun AppNavHost() {
                 )
             }
         }
-
-
     }
 }
 

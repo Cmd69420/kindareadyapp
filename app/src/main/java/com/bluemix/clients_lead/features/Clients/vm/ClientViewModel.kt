@@ -9,15 +9,19 @@ import com.bluemix.clients_lead.core.network.ApiClientProvider
 import com.bluemix.clients_lead.core.network.ApiEndpoints
 import com.bluemix.clients_lead.core.network.TokenStorage
 import com.bluemix.clients_lead.domain.model.Client
+import com.bluemix.clients_lead.domain.usecases.CreateClient
 import com.bluemix.clients_lead.domain.usecases.GetAllClients
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
 import com.bluemix.clients_lead.domain.usecases.SearchRemoteClients
 import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
-import io.ktor.client.call.*
-import io.ktor.client.plugins.*
-import io.ktor.client.request.forms.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import kotlinx.coroutines.flow.update
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.forms.submitFormWithBinaryData
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,7 +50,10 @@ data class ClientsUiState(
     val userLocation: Pair<Double, Double>? = null,
     val isSearching: Boolean = false,
     val isTrackingEnabled: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val isCreating: Boolean = false,
+    val createSuccess: Boolean = false,
+    val createError: String? = null
 )
 
 class ClientsViewModel(
@@ -55,7 +62,8 @@ class ClientsViewModel(
     private val tokenStorage: TokenStorage,
     private val getCurrentUserId: GetCurrentUserId,
     private val locationTrackingStateManager: LocationTrackingStateManager,
-    private val context: Context
+    private val context: Context,
+    private val createClient: CreateClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ClientsUiState())
@@ -111,6 +119,41 @@ class ClientsViewModel(
             }
         }
     }
+
+    // Inside ClientsViewModel class
+
+    fun resetCreateState() {
+        _uiState.update { currentState ->
+            currentState.copy(
+                createSuccess = false,
+                createError = null
+            )
+        }
+    }
+
+    // In ClientsViewModel.kt
+    fun createClientAction(
+        name: String,
+        phone: String?, email: String?,
+        address: String?,
+        pincode: String?,
+        notes: String?
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, createError = null) }
+
+            try {
+                // Your repository call goes here, e.g.:
+                // repository.createClient(Client(name, phone, email, ...))
+
+                _uiState.update { it.copy(isLoading = false, createSuccess = true) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, createError = e.message) }
+            }
+        }
+    }
+
+
 
     fun refreshTrackingState() {
         Timber.d("ClientsViewModel: refreshing tracking state from system")
