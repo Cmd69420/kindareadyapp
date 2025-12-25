@@ -20,6 +20,8 @@ import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.request.*
+import io.ktor.http.*
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -134,25 +136,55 @@ class ClientsViewModel(
     // In ClientsViewModel.kt
     fun createClientAction(
         name: String,
-        phone: String?, email: String?,
+        phone: String?,
+        email: String?,
         address: String?,
         pincode: String?,
         notes: String?
     ) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, createError = null) }
+            _uiState.update { it.copy(isCreating = true, createError = null, createSuccess = false) }
 
             try {
-                // Your repository call goes here, e.g.:
-                // repository.createClient(Client(name, phone, email, ...))
+                // 👇 Use the injected use case instead of creating new client!
+                when (val result = createClient(name, phone, email, address, pincode, notes)) {
+                    is AppResult.Success -> {
+                        Timber.d("✅ Client created successfully: ${result.data.name}")
 
-                _uiState.update { it.copy(isLoading = false, createSuccess = true) }
+                        _uiState.update {
+                            it.copy(
+                                isCreating = false,
+                                createSuccess = true
+                            )
+                        }
+
+                        // Refresh client list
+                        loadClients()
+                    }
+
+                    is AppResult.Error -> {
+                        Timber.e("❌ Create client failed: ${result.error.message}")
+
+                        _uiState.update {
+                            it.copy(
+                                isCreating = false,
+                                createError = result.error.message ?: "Failed to create client"
+                            )
+                        }
+                    }
+                }
+
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, createError = e.message) }
+                Timber.e(e, "❌ Create client error: ${e.message}")
+                _uiState.update {
+                    it.copy(
+                        isCreating = false,
+                        createError = e.message ?: "Failed to create client"
+                    )
+                }
             }
         }
     }
-
 
 
     fun refreshTrackingState() {

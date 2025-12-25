@@ -140,7 +140,8 @@ class ClientRepositoryImpl(
                 notes = notes
             )
 
-            val response = httpClient.post(ApiEndpoints.Clients.CREATE) {
+            // 👇 Change this line to use MANUAL_CREATE
+            val response = httpClient.post(ApiEndpoints.Clients.MANUAL_CREATE) {
                 setBody(request)
             }.body<SingleClientResponse>()
 
@@ -149,6 +150,7 @@ class ClientRepositoryImpl(
             response.client.toClientDto().toDomain()
         }
     }
+
 
     override suspend fun uploadExcelFile(file: ByteArray, token: String): Boolean {
         return try {

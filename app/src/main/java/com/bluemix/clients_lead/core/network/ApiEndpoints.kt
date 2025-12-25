@@ -26,9 +26,10 @@ object ApiEndpoints {
         const val BASE = "/clients"
         const val UPLOAD_EXCEL = "/clients/upload-excel"
 
-        const val CREATE = "$BASE"
+        const val MANUAL_CREATE = "/api/manual-clients"
 
         fun byId(clientId: String) = "$BASE/$clientId"
+        fun manualById(clientId: String) = "/manual-clients/$clientId"
     }
 
     object User {

@@ -56,8 +56,8 @@ fun ClientsScreen(
         uri?.let { viewModel.uploadExcelFile(context, it) }
     }
 
-    LaunchedEffect(uiState.error) {
-        uiState.error?.let {
+    LaunchedEffect(key1 = uiState.error) {
+        if (uiState.error != null) {
             kotlinx.coroutines.delay(3000)
             viewModel.clearError()
         }
