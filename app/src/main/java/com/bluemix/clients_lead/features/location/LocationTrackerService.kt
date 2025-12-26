@@ -101,8 +101,16 @@ class LocationTrackerService : Service() {
             Action.STOP.name -> stop()
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
+
     }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Timber.w("🚫 App removed from recents → stopping location tracking service")
+        stop()
+        super.onTaskRemoved(rootIntent)
+    }
+
 
     override fun onBind(intent: Intent?): IBinder {
         return LocationBinder()
@@ -138,12 +146,16 @@ class LocationTrackerService : Service() {
         locationTrackingJob = scope.launch {
             try {
                 locationManager.trackLocation().collect { location ->
-                    latestLocation = location
 
-                    // Emit to UI
+                    if (!locationManager.isLocationEnabled()) {
+                        Timber.w("🚫 GPS turned OFF while service running → stopping service")
+                        stop()
+                        return@collect
+                    }
+
+                    latestLocation = location
                     _locationFlow.emit(location)
 
-                    // Update notification
                     val latitude = String.format("%.4f", location.latitude)
                     val longitude = String.format("%.4f", location.longitude)
 
@@ -154,6 +166,7 @@ class LocationTrackerService : Service() {
                             .build()
                     )
                 }
+
             } catch (e: CancellationException) {
                 Timber.d("Location tracking cancelled")
                 throw e // Re-throw to properly cancel coroutine

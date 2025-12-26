@@ -65,6 +65,11 @@ class LocationTrackingStateManager(
 
     fun isCurrentlyTracking(): Boolean = _trackingState.value
 
+    fun isLocationEnabled(): Boolean {
+        return locationSettingsMonitor.isLocationEnabled.value
+    }
+
+
     suspend fun startTracking() {
         Timber.tag(TAG).d("Request received to START location tracking")
 

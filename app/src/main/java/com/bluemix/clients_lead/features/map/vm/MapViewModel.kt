@@ -157,8 +157,13 @@ class MapViewModel(
      * Delegates to [LocationTrackingStateManager] to start the foreground service.
      */
     fun enableTracking() {
-        viewModelScope.launch {  // ✅ Add coroutine scope
-            Timber.d("MapViewModel: enableTracking() requested from UI")
+        viewModelScope.launch {
+            if (!locationTrackingStateManager.isLocationEnabled()) {
+                Timber.w("Cannot start tracking: Location services are OFF")
+                return@launch
+            }
+
+            Timber.d("Starting location tracking")
             locationTrackingStateManager.startTracking()
         }
     }

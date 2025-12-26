@@ -555,7 +555,16 @@ fun MapScreen(
                 if (!uiState.isTrackingEnabled) {
                     TrackingRequiredOverlay(
                         modifier = Modifier.fillMaxSize(),
-                        onEnableTracking = { viewModel.enableTracking() },
+                        onEnableTracking = {
+                            if (!isLocationEnabled) {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                                )
+                            } else {
+                                viewModel.enableTracking()
+                            }
+                        }
+                        ,
                         onRefreshStatus = { viewModel.refreshTrackingState() }
                     )
                 }
