@@ -122,6 +122,17 @@ class LocationTrackerService : Service() {
         Timber.d("Starting location tracking for user: $userId")
 
         val locationManager = LocationManager(applicationContext)
+        if (!locationManager.hasLocationPermission()) {
+            Timber.e("Cannot start tracking: Location permission not granted")
+            stop()
+            return
+        }
+        if (!locationManager.isLocationEnabled()) {
+            Timber.e("Cannot start tracking: Location services disabled")
+            stop()
+            return
+        }
+
 
         // Start location tracking
         locationTrackingJob = scope.launch {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 import android.location.LocationManager as AndroidLocationManager
 
 class LocationManager(
@@ -60,19 +61,20 @@ class LocationManager(
         onSuccess: (latitude: String, longitude: String) -> Unit,
         onError: (message: String) -> Unit = {}
     ) {
-        // Check permissions
+        // ✅ Explicit permission check
         if (!hasLocationPermission()) {
             onError("Location permission not granted")
             return
         }
 
-        // Check if location services are enabled
         if (!isLocationEnabled()) {
             onError("Location services are disabled")
             return
         }
 
         try {
+            // ✅ Safe to call - permissions verified
+            @Suppress("MissingPermission")
             fusedLocationClient
                 .lastLocation
                 .addOnSuccessListener { location ->
@@ -96,19 +98,28 @@ class LocationManager(
      * Suspend version of getLocation for use in coroutines
      * @return Location object or null if unavailable
      */
+
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     suspend fun getLastKnownLocation(): Location? {
+        // ✅ Explicit permission check
         if (!hasLocationPermission()) {
-            throw SecurityException("Location permission not granted")
+            Timber.w("Location permission not granted")
+            return null
         }
 
         if (!isLocationEnabled()) {
-            throw IllegalStateException("Location services are disabled")
+            Timber.w("Location services disabled")
+            return null
         }
 
         return try {
+            // ✅ Safe to call now
             fusedLocationClient.lastLocation.await()
+        } catch (e: SecurityException) {
+            Timber.e(e, "SecurityException getting location")
+            null
         } catch (e: Exception) {
+            Timber.e(e, "Error getting location")
             null
         }
     }
@@ -124,19 +135,17 @@ class LocationManager(
         priority: Int = Priority.PRIORITY_HIGH_ACCURACY
     ): Flow<Location> = callbackFlow {
 
-        // Check permissions
+        // ✅ Explicit permission check
         if (!hasLocationPermission()) {
             close(SecurityException("Location permission not granted"))
             return@callbackFlow
         }
 
-        // Check if location services are enabled
         if (!isLocationEnabled()) {
             close(IllegalStateException("Location services are disabled"))
             return@callbackFlow
         }
 
-        // Create location callback
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 super.onLocationResult(result)
@@ -146,14 +155,14 @@ class LocationManager(
             }
         }
 
-        // Create location request
         val request = LocationRequest.Builder(priority, interval)
-            .setMinUpdateIntervalMillis(interval / 2) // Allow faster updates if available
-            .setWaitForAccurateLocation(false) // Don't wait for accurate location
+            .setMinUpdateIntervalMillis(interval / 2)
+            .setWaitForAccurateLocation(false)
             .build()
 
         try {
-            // Request location updates
+            // ✅ Safe to call - permissions verified
+            @Suppress("MissingPermission")
             fusedLocationClient.requestLocationUpdates(
                 request,
                 locationCallback,
@@ -165,11 +174,11 @@ class LocationManager(
             close(e)
         }
 
-        // Cleanup when Flow is cancelled or closed
         awaitClose {
             fusedLocationClient.removeLocationUpdates(locationCallback)
         }
     }
+
 
     /**
      * Track location with balanced power consumption

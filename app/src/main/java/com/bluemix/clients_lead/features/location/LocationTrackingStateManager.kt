@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
-
+import kotlinx.coroutines.launch
 /**
  * Centralized manager for location tracking state.
  *
@@ -23,12 +23,45 @@ class LocationTrackingStateManager(
     private val trackingManager: LocationTrackingManager   // <-- injected small manager
 ) {
 
+    private val locationSettingsMonitor = LocationSettingsMonitor(appContext)
     private val _trackingState = MutableStateFlow(false)
     val trackingState: StateFlow<Boolean> = _trackingState.asStateFlow()
 
     init {
         updateTrackingState()
+        startLocationSettingsMonitoring()  // 👈 Add this
     }
+
+    private fun startLocationSettingsMonitoring() {
+        locationSettingsMonitor.startMonitoring()
+
+        // React to location settings changes
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            locationSettingsMonitor.isLocationEnabled.collect { enabled ->
+                Timber.tag(TAG).d("Location enabled state changed: $enabled")
+
+                // If location was disabled and service is running, stop it
+                if (!enabled && isServiceRunning(LocationTrackerService::class.java)) {
+                    Timber.tag(TAG).w("⚠️ Location disabled by user, stopping tracking service")
+                    stopTracking()
+                }
+
+                // Update tracking state
+                updateTrackingState()
+            }
+        }
+    }
+
+    // 👇 Add cleanup method
+    fun cleanup() {
+        locationSettingsMonitor.stopMonitoring()
+    }
+
+
+
+
+
+
 
     fun isCurrentlyTracking(): Boolean = _trackingState.value
 
@@ -37,6 +70,12 @@ class LocationTrackingStateManager(
 
         if (!hasLocationPermissions()) {
             Timber.tag(TAG).e("❌ Cannot start tracking - Location permissions not granted!")
+            _trackingState.value = false
+            return
+        }
+        val locationManager = LocationManager(appContext)
+        if (!locationManager.isLocationEnabled()) {
+            Timber.tag(TAG).e("❌ Cannot start tracking - Location services disabled!")
             _trackingState.value = false
             return
         }

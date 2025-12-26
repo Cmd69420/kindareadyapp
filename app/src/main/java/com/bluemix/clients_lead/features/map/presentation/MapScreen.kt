@@ -59,10 +59,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import android.app.Activity
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
+import com.bluemix.clients_lead.features.location.LocationSettingsMonitor
 import com.bluemix.clients_lead.features.expense.presentation.TripExpenseSheet
 import com.bluemix.clients_lead.features.map.vm.MapViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -89,6 +91,13 @@ import ui.components.Scaffold
 import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
+import android.provider.Settings
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.material3.AlertDialog
+import android.content.Intent
+
+
+
 
 // Default location (Mumbai, India) - Initial camera position before user location loads
 private val DefaultLocation = LatLng(19.0760, 72.8777)
@@ -124,6 +133,46 @@ fun MapScreen(
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
     )
+
+
+    val locationSettingsMonitor = remember {
+        LocationSettingsMonitor(context)
+    }
+
+    DisposableEffect(Unit) {
+        locationSettingsMonitor.startMonitoring()
+        onDispose {
+            locationSettingsMonitor.stopMonitoring()
+        }
+    }
+
+    val isLocationEnabled by locationSettingsMonitor.isLocationEnabled.collectAsState()
+
+    // Show dialog when location is disabled
+    if (!isLocationEnabled && uiState.isTrackingEnabled) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Location Services Disabled") },
+            text = {
+                Text("Please enable location services from your device settings to continue using the app.")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    // Open location settings
+                    context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { /* Handle later */ }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
+
 
     LaunchedEffect(Unit) {
         if (!locationPermissions.allPermissionsGranted) {

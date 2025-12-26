@@ -48,6 +48,19 @@ class MapViewModel(
         observeTrackingState()
         refreshTrackingState()
         startLocationPolling()
+        observeLocationSettings()
+    }
+
+    private fun observeLocationSettings() {
+        viewModelScope.launch {
+            // Access the monitor through the state manager
+            // You'll need to expose it via a property
+        }
+    }
+    override fun onCleared() {
+        super.onCleared()
+        // 👇 Add cleanup
+        locationTrackingStateManager.cleanup()
     }
 
     /**
@@ -91,7 +104,7 @@ class MapViewModel(
                 }
 
                 // Poll every 10 seconds
-                kotlinx.coroutines.delay(10000)
+                kotlinx.coroutines.delay(30000)
             }
         }
     }
