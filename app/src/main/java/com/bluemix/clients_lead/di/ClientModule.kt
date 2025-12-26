@@ -7,6 +7,7 @@ import com.bluemix.clients_lead.features.Clients.vm.ClientDetailViewModel
 import com.bluemix.clients_lead.features.Clients.vm.ClientsViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
+import com.bluemix.clients_lead.data.repository.OCRRepository
 
 val clientModule = module {
 
@@ -40,6 +41,7 @@ val clientModule = module {
     }
 
     factory { CreateClient(repository = get()) }
+    factory { OCRRepository() }
 
     // ViewModels
     viewModel {
