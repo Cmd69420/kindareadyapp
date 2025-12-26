@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.bluemix.clients_lead.domain.model.LocationPlace
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -163,14 +164,22 @@ fun TripExpenseSheet(
                         }
                     }
 
-                    // TRIP INFORMATION SECTION
+                    // ============================================
+// TRIP INFORMATION SECTION - UPDATED
+// ============================================
+
                     SectionCard(title = "Trip Information") {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+                            // START LOCATION (Current Location)
                             OutlinedTextField(
-                                value = uiState.startLocation,
-                                onValueChange = { viewModel.updateStartLocation(it) },
+                                value = uiState.startLocation?.displayName ?: "",
+                                onValueChange = {},
                                 label = { Text("Start Location", color = Color(0xFFB0B0B0)) },
-                                placeholder = { Text("Main Office, Delhi", color = Color(0xFF606060)) },
+                                placeholder = {
+                                    Text("Tap button to get current location", color = Color(0xFF606060))
+                                },
+                                enabled = false,
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.LocationOn,
@@ -178,33 +187,91 @@ fun TripExpenseSheet(
                                         tint = Color(0xFF5E92F3)
                                     )
                                 },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = uiState.endLocation,
-                                onValueChange = { viewModel.updateEndLocation(it) },
-                                label = { Text("End Location", color = Color(0xFFB0B0B0)) },
-                                placeholder = { Text("Enter destination", color = Color(0xFF606060)) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Place,
-                                        contentDescription = null,
-                                        tint = Color(0xFF5E92F3)
-                                    )
+                                trailingIcon = {
+                                    if (uiState.isLoadingCurrentLocation) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = Color(0xFF5E92F3)
+                                        )
+                                    } else {
+                                        IconButton(
+                                            onClick = { viewModel.loadCurrentLocation() }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MyLocation,
+                                                contentDescription = "Get current location",
+                                                tint = Color(0xFF5E92F3)
+                                            )
+                                        }
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             )
+
+                            // END LOCATION (Search + Autocomplete)
+                            Box {
+                                OutlinedTextField(
+                                    value = uiState.endLocationQuery,
+                                    onValueChange = { viewModel.searchEndLocation(it) },
+                                    label = { Text("End Location", color = Color(0xFFB0B0B0)) },
+                                    placeholder = {
+                                        Text("Search destination...", color = Color(0xFF606060))
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Place,
+                                            contentDescription = null,
+                                            tint = Color(0xFF5E92F3)
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (uiState.isSearching) {
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Color(0xFF5E92F3)
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // SEARCH RESULTS DROPDOWN
+                                if (uiState.searchResults.isNotEmpty()) {
+                                    androidx.compose.material3.Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 60.dp),
+                                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                                            containerColor = Color(0xFF2A2A2A)
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Column {
+                                            uiState.searchResults.take(5).forEach { place ->
+                                                LocationSearchResultItem(
+                                                    place = place,
+                                                    onClick = {
+                                                        viewModel.selectEndLocation(place)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
+                                // DATE & TIME (READ ONLY)
                                 OutlinedTextField(
                                     value = formatDate(uiState.travelDate),
                                     onValueChange = {},
-                                    label = { Text("Date & Time", color = Color(0xFFB0B0B0)) },
                                     enabled = false,
+                                    label = { Text("Date & Time", color = Color(0xFFB0B0B0)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Default.CalendarToday,
@@ -215,13 +282,12 @@ fun TripExpenseSheet(
                                     modifier = Modifier.weight(1f)
                                 )
 
+                                // DISTANCE (AUTO-CALCULATED)
                                 OutlinedTextField(
-                                    value = uiState.distanceKm.toString(),
-                                    onValueChange = {
-                                        it.toDoubleOrNull()?.let { d -> viewModel.updateDistance(d) }
-                                    },
+                                    value = String.format("%.1f", uiState.distanceKm),
+                                    onValueChange = {},
+                                    enabled = false,
                                     label = { Text("Distance", color = Color(0xFFB0B0B0)) },
-                                    placeholder = { Text("0.0", color = Color(0xFF606060)) },
                                     trailingIcon = {
                                         Text(
                                             "KM",
@@ -234,6 +300,7 @@ fun TripExpenseSheet(
                             }
                         }
                     }
+
 
                     // TRANSPORT MODE SECTION
                     SectionCard(title = "Transport Mode") {
@@ -646,7 +713,43 @@ private fun AddReceiptButton(onClick: () -> Unit) {
     }
 }
 
+
+@Composable
+private fun LocationSearchResultItem(
+    place: LocationPlace,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Text(
+            text = place.displayName,
+            style = AppTheme.typography.body1,
+            color = Color.White,
+            maxLines = 2
+        )
+
+        Text(
+            text = "${String.format("%.4f", place.latitude)}, ${String.format("%.4f", place.longitude)}",
+            style = AppTheme.typography.label3,
+            color = Color(0xFF808080)
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Color(0xFF3A3A3A))
+    )
+}
+
+
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
 }
+

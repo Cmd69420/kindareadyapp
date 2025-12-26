@@ -117,6 +117,7 @@ fun MapScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var showExpenseSheet by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
+    var hasAutoFocusedOnUser by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val activity = context as? Activity
 
@@ -181,9 +182,32 @@ fun MapScreen(
             viewModel.refreshTrackingState()
         }
     }
+    LaunchedEffect(uiState.currentLocation, uiState.isTrackingEnabled) {
+        if (
+            uiState.currentLocation != null &&
+            uiState.isTrackingEnabled &&
+            !hasAutoFocusedOnUser
+        ) {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(
+                        uiState.currentLocation!!.latitude,
+                        uiState.currentLocation!!.longitude
+                    ),
+                    16.5f // good “where am I” zoom
+                ),
+                durationMs = 1000
+            )
+            hasAutoFocusedOnUser = true
+        }
+    }
+
 
     LaunchedEffect(uiState.clients) {
-        if (uiState.clients.isNotEmpty() && !uiState.isLoading) {
+        if (hasAutoFocusedOnUser &&
+            uiState.clients.isNotEmpty() &&
+            !uiState.isLoading
+        ) {
             val firstClientWithLocation = uiState.clients.firstOrNull {
                 it.latitude != null && it.longitude != null
             }

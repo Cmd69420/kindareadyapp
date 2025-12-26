@@ -118,6 +118,12 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
+    // Google Maps & Places
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.1.0")
+    implementation("com.google.maps.android:places-ktx:3.1.0")
+    implementation("com.google.android.libraries.places:places:3.3.0")
+
 
     // Material Icons Extended (if not included)
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
