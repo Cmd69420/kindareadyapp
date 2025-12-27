@@ -11,6 +11,7 @@ import com.bluemix.clients_lead.domain.usecases.SignInWithEmail
 import com.bluemix.clients_lead.domain.usecases.SignOut
 import com.bluemix.clients_lead.domain.usecases.SignUpWithEmail
 import com.bluemix.clients_lead.features.auth.vm.AuthViewModel
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
@@ -37,7 +38,8 @@ val authModule = module {
             handleAuthRedirect = get(),
             isLoggedIn = get(),
             signOut = get(),
-            authRedirectUrl = "clientslead://auth"
+            authRedirectUrl = "clientslead://auth",
+            context = androidContext()
         )
     }
 }

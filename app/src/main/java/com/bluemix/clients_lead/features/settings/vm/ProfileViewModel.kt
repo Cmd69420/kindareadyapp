@@ -10,6 +10,7 @@ import com.bluemix.clients_lead.domain.usecases.GetTotalExpenseUseCase
 import com.bluemix.clients_lead.domain.usecases.GetUserProfile
 import com.bluemix.clients_lead.domain.usecases.SaveLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.SignOut
+import com.bluemix.clients_lead.domain.usecases.UpdateUserProfile
 import com.bluemix.clients_lead.features.location.LocationTrackingStateManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +25,9 @@ data class ProfileUiState(
     val profile: UserProfile? = null,
     val isTrackingEnabled: Boolean = false,
     val error: String? = null,
-    val totalSpent: Double = 0.0
+    val totalSpent: Double = 0.0,
+    val showNameDialog: Boolean = false,
+    val isUpdatingName: Boolean = false
 )
 
 class ProfileViewModel(
@@ -34,7 +37,8 @@ class ProfileViewModel(
     private val saveLocationTrackingPreference: SaveLocationTrackingPreference,
     private val signOut: SignOut,
     private val trackingStateManager: LocationTrackingStateManager,
-    private val getTotalExpense: GetTotalExpenseUseCase
+    private val getTotalExpense: GetTotalExpenseUseCase,
+    private val updateUserProfile: UpdateUserProfile
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -45,12 +49,9 @@ class ProfileViewModel(
         observeTrackingState()
     }
 
-    /** Keeps UI toggle in sync with the REAL foreground service state */
     private fun observeTrackingState() {
         viewModelScope.launch {
-            // initialize state once
             trackingStateManager.updateTrackingState()
-            // automatically track service state forever
             trackingStateManager.trackingState.collectLatest { enabled ->
                 _uiState.update { it.copy(isTrackingEnabled = enabled) }
             }
@@ -69,14 +70,22 @@ class ProfileViewModel(
 
             when (val result = getUserProfile(userId)) {
                 is AppResult.Success -> {
+                    val profile = result.data
                     _uiState.update {
-                        it.copy(isLoading = false, profile = result.data)
+                        it.copy(
+                            isLoading = false,
+                            profile = profile,
+                            showNameDialog = profile.fullName.isNullOrBlank()
+                        )
                     }
-                    // Load total expenses after profile loads successfully
                     loadTotalExpense()
                 }
+
                 is AppResult.Error -> _uiState.update {
-                    it.copy(isLoading = false, error = result.error.message ?: "Failed to load profile")
+                    it.copy(
+                        isLoading = false,
+                        error = result.error.message ?: "Failed to load profile"
+                    )
                 }
             }
         }
@@ -91,18 +100,17 @@ class ProfileViewModel(
                     _uiState.update { it.copy(totalSpent = result.data) }
                     Timber.d("Total expenses loaded: ${result.data}")
                 }
+
                 is AppResult.Error -> {
                     Timber.e("Failed to load total expenses: ${result.error.message}")
-                    // Don't show error to user, just log it
                 }
             }
         }
     }
 
-    /** Called when user toggles switch */
     fun toggleLocationTracking(enabled: Boolean) {
         viewModelScope.launch {
-            saveLocationTrackingPreference(enabled) // keep storing preference
+            saveLocationTrackingPreference(enabled)
 
             if (enabled) {
                 Timber.d("Starting tracking from Profile")
@@ -111,14 +119,13 @@ class ProfileViewModel(
                 Timber.d("Stopping tracking from Profile")
                 trackingStateManager.stopTracking()
             }
-            // DO NOT manually update uiState here – it now auto-updates from Flow
         }
     }
 
     fun handleSignOut(onSuccess: () -> Unit) {
         viewModelScope.launch {
             if (_uiState.value.isTrackingEnabled) {
-                trackingStateManager.stopTracking()   // safe stop on logout
+                trackingStateManager.stopTracking()
             }
             when (val result = signOut()) {
                 is AppResult.Success -> onSuccess()
@@ -131,6 +138,54 @@ class ProfileViewModel(
 
     fun refresh() {
         loadProfile()
-        // loadTotalExpense() will be called automatically after loadProfile() succeeds
+    }
+
+    fun showNameDialog() {
+        _uiState.update { it.copy(showNameDialog = true) }
+    }
+
+    fun hideNameDialog() {
+        _uiState.update { it.copy(showNameDialog = false) }
+    }
+
+    fun updateName(newName: String) {
+        viewModelScope.launch {
+            val userId = getCurrentUserId() ?: return@launch
+
+            _uiState.update { it.copy(isUpdatingName = true) }
+
+            when (
+                val result = updateUserProfile(
+                    userId = userId,
+                    fullName = newName,
+                    department = _uiState.value.profile?.department,
+                    workHoursStart = _uiState.value.profile?.workHoursStart,
+                    workHoursEnd = _uiState.value.profile?.workHoursEnd
+                )
+            ) {
+                is AppResult.Success -> {
+                    // 🔴 DO NOT trust result.data
+                    loadProfile() // ✅ REFRESH FROM SOURCE OF TRUTH
+
+                    _uiState.update {
+                        it.copy(
+                            isUpdatingName = false,
+                            showNameDialog = false
+                        )
+                    }
+
+                    Timber.d("✅ Name updated, profile refreshed")
+                }
+
+                is AppResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isUpdatingName = false,
+                            error = result.error.message ?: "Failed to update name"
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -84,6 +84,8 @@ import ui.components.topbar.TopBarDefaults
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material3.TextButton
+
 
 @Composable
 fun ProfileScreen(
@@ -139,19 +141,33 @@ fun ProfileScreen(
                     paddingValues = paddingValues,
                     uiState = uiState,
                     onToggleTracking = viewModel::toggleLocationTracking,
-                    onSignOutClick = { showLogoutDialog = true }
+                    onSignOutClick = { showLogoutDialog = true },
+                    onEditName = { viewModel.showNameDialog() }
                 )
             }
         }
     }
 
-    // Animated Logout Dialog
     AnimatedLogoutDialog(
         show = showLogoutDialog,
         onDismiss = { showLogoutDialog = false },
         onConfirm = {
             showLogoutDialog = false
             viewModel.handleSignOut(onNavigateToAuth)
+        }
+    )
+
+    EditNameDialog(
+        show = uiState.showNameDialog,
+        currentName = uiState.profile?.fullName,
+        isLoading = uiState.isUpdatingName,
+        onDismiss = {
+            if (!uiState.profile?.fullName.isNullOrBlank()) {
+                viewModel.hideNameDialog()
+            }
+        },
+        onSave = { newName ->
+            viewModel.updateName(newName)
         }
     )
 }
@@ -219,7 +235,8 @@ private fun AnimatedProfileContent(
     paddingValues: PaddingValues,
     uiState: com.bluemix.clients_lead.features.settings.vm.ProfileUiState,
     onToggleTracking: (Boolean) -> Unit,
-    onSignOutClick: () -> Unit
+    onSignOutClick: () -> Unit,
+    onEditName: () -> Unit
 ) {
     val profile = uiState.profile ?: return
 
@@ -233,18 +250,16 @@ private fun AnimatedProfileContent(
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Animated User Info Card with Gradient
         AnimatedUserCard(
             fullName = profile.fullName ?: profile.email ?: "User",
-            userId = profile.userId
+            userId = profile.userId,
+            onEditName = onEditName
         )
 
-        // NEW: Total Expenses Card
         AnimatedTotalExpenseCard(
             totalSpent = uiState.totalSpent
         )
 
-        // Animated Settings Section
         AnimatedSection(title = "Settings", index = 1) {
             AnimatedTrackingToggle(
                 isEnabled = uiState.isTrackingEnabled,
@@ -252,7 +267,6 @@ private fun AnimatedProfileContent(
             )
         }
 
-        // Animated Account Section
         AnimatedSection(title = "Account", index = 2) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AnimatedProfileMenuItem(
@@ -289,7 +303,6 @@ private fun AnimatedProfileContent(
             }
         }
 
-        // Animated Danger Zone
         AnimatedDangerZone(onSignOutClick = onSignOutClick)
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -297,7 +310,11 @@ private fun AnimatedProfileContent(
 }
 
 @Composable
-private fun AnimatedUserCard(fullName: String, userId: String) {
+private fun AnimatedUserCard(
+    fullName: String,
+    userId: String,
+    onEditName: () -> Unit
+) {
     var isVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -341,7 +358,6 @@ private fun AnimatedUserCard(fullName: String, userId: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Animated Avatar with Pulse
             val infiniteTransition = rememberInfiniteTransition(label = "avatarPulse")
             val avatarScale by infiniteTransition.animateFloat(
                 initialValue = 1f,
@@ -369,13 +385,25 @@ private fun AnimatedUserCard(fullName: String, userId: String) {
                 )
             }
 
-            Text(
-                text = fullName,
-                style = AppTheme.typography.h1,
-                color = AppTheme.colors.text
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = fullName,
+                    style = AppTheme.typography.h1,
+                    color = AppTheme.colors.text
+                )
 
-            // Animated ID Badge
+                TextButton(onClick = onEditName) {
+                    Text(
+                        text = "Edit Name",
+                        style = AppTheme.typography.body3,
+                        color = AppTheme.colors.primary
+                    )
+                }
+            }
+
             AnimatedIdBadge(userId = userId)
         }
     }
@@ -575,7 +603,6 @@ private fun AnimatedTrackingToggle(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Animated Icon
                 val iconColor by animateColorAsState(
                     targetValue = if (isEnabled) AppTheme.colors.success else AppTheme.colors.primary,
                     animationSpec = tween(300),
@@ -728,7 +755,6 @@ private fun AnimatedDangerZone(onSignOutClick: () -> Unit) {
                 style = AppTheme.typography.button
             )
         }
-
     }
 }
 
@@ -792,7 +818,6 @@ private fun AnimatedLogoutDialog(
                 }
             }
         )
-
     }
 }
 

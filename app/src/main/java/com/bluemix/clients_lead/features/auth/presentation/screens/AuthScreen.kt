@@ -1,5 +1,6 @@
 package com.bluemix.clients_lead.features.auth.presentation.screens
 
+import com.bluemix.clients_lead.features.auth.presentation.components.TrialBanner
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -7,7 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.features.auth.vm.AuthEffect
 import com.bluemix.clients_lead.features.auth.vm.AuthViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -83,35 +85,53 @@ fun AuthScreen(
                     }
                 )
 
-                AuthPage.SignIn -> EmailPasswordScreen(
-                    title = "Welcome back",
-                    primaryCta = "Sign in",
-                    secondaryPrompt = "New here?",
-                    secondaryCta = "Create account",
-                    email = ui.value.email,
-                    password = ui.value.password,
-                    loading = ui.value.loading,
-                    onEmailChange = viewModel::onEmailChange,
-                    onPasswordChange = viewModel::onPasswordChange,
-                    onSubmit = { viewModel.doSignIn() },
-                    onSecondary = { page = AuthPage.SignUp },
-                    onBack = { page = AuthPage.Welcome }
-                )
+                AuthPage.SignIn -> Column {
+                    // Trial Banner
+                    TrialBanner(
+                        daysRemaining = ui.value.trialDaysRemaining,
+                        isExpired = ui.value.isTrialExpired,
+                        modifier = Modifier.padding(16.dp)
+                    )
 
-                AuthPage.SignUp -> EmailPasswordScreen(
-                    title = "Create your account",
-                    primaryCta = "Sign up",
-                    secondaryPrompt = "Already have an account?",
-                    secondaryCta = "Sign in",
-                    email = ui.value.email,
-                    password = ui.value.password,
-                    loading = ui.value.loading,
-                    onEmailChange = viewModel::onEmailChange,
-                    onPasswordChange = viewModel::onPasswordChange,
-                    onSubmit = { viewModel.doSignUp() },
-                    onSecondary = { page = AuthPage.SignIn },
-                    onBack = { page = AuthPage.Welcome }
-                )
+                    EmailPasswordScreen(
+                        title = "Welcome back",
+                        primaryCta = "Sign in",
+                        secondaryPrompt = "New here?",
+                        secondaryCta = "Create account",
+                        email = ui.value.email,
+                        password = ui.value.password,
+                        loading = ui.value.loading,
+                        onEmailChange = viewModel::onEmailChange,
+                        onPasswordChange = viewModel::onPasswordChange,
+                        onSubmit = { viewModel.doSignIn() },
+                        onSecondary = { page = AuthPage.SignUp },
+                        onBack = { page = AuthPage.Welcome }
+                    )
+                }
+
+                AuthPage.SignUp -> Column {
+                    // Trial Banner
+                    TrialBanner(
+                        daysRemaining = ui.value.trialDaysRemaining,
+                        isExpired = ui.value.isTrialExpired,
+                        modifier = Modifier.padding(16.dp)
+                    )
+
+                    EmailPasswordScreen(
+                        title = "Create your account",
+                        primaryCta = "Sign up",
+                        secondaryPrompt = "Already have an account?",
+                        secondaryCta = "Sign in",
+                        email = ui.value.email,
+                        password = ui.value.password,
+                        loading = ui.value.loading,
+                        onEmailChange = viewModel::onEmailChange,
+                        onPasswordChange = viewModel::onPasswordChange,
+                        onSubmit = { viewModel.doSignUp() },
+                        onSecondary = { page = AuthPage.SignIn },
+                        onBack = { page = AuthPage.Welcome }
+                    )
+                }
 
                 AuthPage.Magic -> MagicLinkScreen(
                     email = ui.value.email,

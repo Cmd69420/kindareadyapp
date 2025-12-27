@@ -1,9 +1,11 @@
 package com.bluemix.clients_lead.data.repository
 
+import android.content.Context
 import android.util.Log
 import com.bluemix.clients_lead.core.common.extensions.runAppCatching
 import com.bluemix.clients_lead.core.common.extensions.toAppError
 import com.bluemix.clients_lead.core.common.utils.AppResult
+import com.bluemix.clients_lead.core.common.utils.DeviceIdentifier
 import com.bluemix.clients_lead.core.network.ApiEndpoints
 import com.bluemix.clients_lead.core.network.SessionManager
 import com.bluemix.clients_lead.core.network.TokenStorage
@@ -19,15 +21,23 @@ import kotlinx.serialization.Serializable
 class AuthRepositoryImpl(
     private val httpClient: HttpClient,
     private val sessionManager: SessionManager,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val context: Context // ✅ Added context for DeviceIdentifier
 ) : AuthRepository {
 
     override suspend fun signIn(email: String, password: String): AppResult<AuthResponse> =
         runAppCatching(mapper = { it.toAppError() }) {
             Log.d("AUTH", "Attempting login to: ${ApiEndpoints.BASE_URL}${ApiEndpoints.Auth.LOGIN}")
 
+            // ✅ Get device ID for trial tracking
+            val deviceId = DeviceIdentifier.getDeviceId(context)
+
             val response = httpClient.post(ApiEndpoints.Auth.LOGIN) {
-                setBody(LoginRequest(email = email, password = password))
+                setBody(LoginRequest(
+                    email = email,
+                    password = password,
+                    deviceId = deviceId // ✅ Send device ID to backend
+                ))
             }.body<LoginResponse>()
 
             Log.d("AUTH", "Login successful: ${response.token}")
@@ -50,8 +60,15 @@ class AuthRepositoryImpl(
 
     override suspend fun signUp(email: String, password: String): AppResult<AuthResponse> =
         runAppCatching(mapper = { it.toAppError() }) {
+            // ✅ Get device ID for trial tracking
+            val deviceId = DeviceIdentifier.getDeviceId(context)
+
             val response = httpClient.post(ApiEndpoints.Auth.SIGNUP) {
-                setBody(SignupRequest(email = email, password = password))
+                setBody(SignupRequest(
+                    email = email,
+                    password = password,
+                    deviceId = deviceId // ✅ Send device ID to backend
+                ))
             }.body<SignupResponse>()
 
             // Save token immediately
@@ -135,7 +152,8 @@ class AuthRepositoryImpl(
 @Serializable
 data class LoginRequest(
     val email: String,
-    val password: String
+    val password: String,
+    val deviceId: String? = null // ✅ Added device ID
 )
 
 @Serializable
@@ -145,7 +163,8 @@ data class SignupRequest(
     val fullName: String? = null,
     val department: String? = null,
     val workHoursStart: String? = null,
-    val workHoursEnd: String? = null
+    val workHoursEnd: String? = null,
+    val deviceId: String? = null // ✅ Added device ID
 )
 
 @Serializable

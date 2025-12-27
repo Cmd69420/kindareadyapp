@@ -39,7 +39,7 @@ val appModule = module {
     }
 
     // Repositories
-    single<AuthRepository> { AuthRepositoryImpl(get(), get(), get()) }
+    single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), androidContext()) }
     single<IClientRepository> { ClientRepositoryImpl(get()) }
     single<ILocationRepository> { LocationRepositoryImpl(get()) }
     single<IProfileRepository> { ProfileRepositoryImpl(get(), androidContext()) }

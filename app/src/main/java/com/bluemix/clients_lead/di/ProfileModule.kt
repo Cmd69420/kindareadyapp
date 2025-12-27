@@ -36,7 +36,9 @@ val profileModule = module {
             saveLocationTrackingPreference = get(),
             signOut = get(),
             trackingStateManager = get(),
-            getTotalExpense = get()
+            getTotalExpense = get(),
+            updateUserProfile = get()
+
         )
     }
 }
