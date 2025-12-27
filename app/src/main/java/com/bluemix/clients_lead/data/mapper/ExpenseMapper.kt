@@ -20,7 +20,7 @@ fun TripExpenseDto.toDomain(): TripExpense {
         amountSpent = amountSpent,
         currency = currency,
         notes = notes,
-        receiptUrls = receiptUrls,
+        receiptImages = receiptImages ?: emptyList(),
         clientId = clientId,
         clientName = clientName,
         createdAt = createdAt.toLongOrNull() ?: System.currentTimeMillis()
@@ -40,7 +40,7 @@ fun TripExpense.toCreateDto(): TripExpenseCreateDto {
         amountSpent = amountSpent,
         currency = currency,
         notes = notes,
-        receiptUrls = receiptUrls,
+        receiptImages = receiptImages,
         clientId = clientId
     )
 }

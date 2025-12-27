@@ -39,8 +39,8 @@ data class TripExpenseDto(
     @SerialName("notes")
     val notes: String? = null,
 
-    @SerialName("receipt_urls")
-    val receiptUrls: List<String> = emptyList(),
+    @SerialName("receipt_images")
+    val receiptImages: List<String>?,
 
     @SerialName("client_id")
     val clientId: String? = null,
@@ -84,8 +84,8 @@ data class TripExpenseCreateDto(
     @SerialName("notes")
     val notes: String? = null,
 
-    @SerialName("receipt_urls")
-    val receiptUrls: List<String> = emptyList(),
+    @SerialName("receipt_images")
+    val receiptImages: List<String> = emptyList(),
 
     @SerialName("client_id")
     val clientId: String? = null

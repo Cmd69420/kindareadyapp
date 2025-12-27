@@ -1,8 +1,11 @@
 package com.bluemix.clients_lead.features.expense.vm
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bluemix.clients_lead.core.common.utils.AppResult
+import com.bluemix.clients_lead.core.common.utils.ImageCompressionUtils
 import com.bluemix.clients_lead.core.network.SessionManager
 import com.bluemix.clients_lead.data.repository.LocationSearchRepository
 import com.bluemix.clients_lead.domain.model.LocationPlace
@@ -34,7 +37,11 @@ data class TripExpenseUiState(
     val transportMode: TransportMode = TransportMode.BUS,
     val amountSpent: Double = 0.0,
     val notes: String = "",
-    val receiptUrls: List<String> = emptyList(),
+    val receiptImages: List<String> = emptyList(),
+
+    // Image processing
+    val isProcessingImage: Boolean = false,
+    val imageProcessingProgress: String? = null,
 
     // UI state
     val isSubmitting: Boolean = false,
@@ -58,9 +65,6 @@ class TripExpenseViewModel(
     // LOCATION SEARCH
     // ============================================
 
-    /**
-     * Load current location (for start location)
-     */
     fun loadCurrentLocation() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -85,9 +89,6 @@ class TripExpenseViewModel(
         }
     }
 
-    /**
-     * Search for end location
-     */
     fun searchEndLocation(query: String) {
         _uiState.value = _uiState.value.copy(endLocationQuery = query)
 
@@ -96,10 +97,9 @@ class TripExpenseViewModel(
             return
         }
 
-        // Cancel previous search
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            delay(500) // Debounce
+            delay(500)
 
             _uiState.value = _uiState.value.copy(isSearching = true)
 
@@ -112,9 +112,6 @@ class TripExpenseViewModel(
         }
     }
 
-    /**
-     * Select end location from search results
-     */
     fun selectEndLocation(location: LocationPlace) {
         _uiState.value = _uiState.value.copy(
             endLocation = location,
@@ -124,9 +121,6 @@ class TripExpenseViewModel(
         calculateDistance()
     }
 
-    /**
-     * Auto-calculate distance when both locations are set
-     */
     private fun calculateDistance() {
         val start = _uiState.value.startLocation
         val end = _uiState.value.endLocation
@@ -137,6 +131,65 @@ class TripExpenseViewModel(
             Timber.d("📏 Distance calculated: $distance km")
         }
     }
+
+    // ============================================
+    // IMAGE HANDLING - NEW
+    // ============================================
+
+    /**
+     * Process image from camera or gallery
+     * Compresses to WebP and uploads
+     */
+    fun processAndUploadImage(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isProcessingImage = true,
+                imageProcessingProgress = "Compressing image...",
+                error = null
+            )
+
+            try {
+                // Compress to WebP Base64
+                val result = ImageCompressionUtils.compressToWebP(
+                    context = context,
+                    uri = uri,
+                    maxWidth = 1280,
+                    maxHeight = 1280,
+                    quality = 80
+                )
+
+                result.fold(
+                    onSuccess = { base64String ->
+                        Timber.i("✅ Image compressed successfully")
+
+                        // ✅ NO UPLOAD - Just add to local state
+                        val currentReceipts = _uiState.value.receiptImages
+                        _uiState.value = _uiState.value.copy(
+                            receiptImages = currentReceipts + base64String,  // Store base64 directly
+                            isProcessingImage = false,
+                            imageProcessingProgress = null
+                        )
+                    },
+                    onFailure = { error ->
+                        Timber.e(error, "❌ Image compression failed")
+                        _uiState.value = _uiState.value.copy(
+                            isProcessingImage = false,
+                            imageProcessingProgress = null,
+                            error = "Image processing failed: ${error.message}"
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "❌ Exception during image processing")
+                _uiState.value = _uiState.value.copy(
+                    isProcessingImage = false,
+                    imageProcessingProgress = null,
+                    error = "Error: ${e.message}"
+                )
+            }
+        }
+    }
+
 
     // ============================================
     // EXPENSE DETAILS
@@ -155,10 +208,10 @@ class TripExpenseViewModel(
     }
 
     fun addReceipt(uri: String) {
-        val currentReceipts = _uiState.value.receiptUrls
+        val currentReceipts = _uiState.value.receiptImages
         if (currentReceipts.size < 5) {
             _uiState.value = _uiState.value.copy(
-                receiptUrls = currentReceipts + uri,
+                receiptImages = currentReceipts + uri,
                 error = null
             )
         }
@@ -166,7 +219,7 @@ class TripExpenseViewModel(
 
     fun removeReceipt(uri: String) {
         _uiState.value = _uiState.value.copy(
-            receiptUrls = _uiState.value.receiptUrls.filter { it != uri }
+            receiptImages = _uiState.value.receiptImages.filter { it != uri }
         )
     }
 
@@ -179,7 +232,6 @@ class TripExpenseViewModel(
             val state = _uiState.value
             val userId = sessionManager.getCurrentUserId()
 
-            // Validation
             if (userId == null) {
                 _uiState.value = state.copy(error = "User not authenticated")
                 return@launch
@@ -218,14 +270,14 @@ class TripExpenseViewModel(
                     transportMode = state.transportMode,
                     amountSpent = state.amountSpent,
                     notes = state.notes.ifBlank { null },
-                    receiptUrls = state.receiptUrls,
+                    receiptImages = state.receiptImages,
                     clientId = null,
                     clientName = null
                 )
 
                 when (val result = submitExpense(expense)) {
                     is AppResult.Success -> {
-                        Timber.i("✅ Expense submitted: ${result.data.id}")
+                        Timber.i("✅ Expense submitted with ${state.receiptImages.size} images")
                         _uiState.value = TripExpenseUiState(
                             successMessage = "Expense submitted successfully!"
                         )
@@ -245,6 +297,7 @@ class TripExpenseViewModel(
                     isSubmitting = false,
                     error = e.message ?: "Unexpected error"
                 )
+
             }
         }
     }

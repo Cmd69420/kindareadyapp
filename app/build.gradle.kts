@@ -189,6 +189,15 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
 
+    // Camera and image compression
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // For WebP conversion (if not already present)
+    implementation("androidx.core:core-ktx:1.12.0")
+
 
 
 }

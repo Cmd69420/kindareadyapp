@@ -1,7 +1,7 @@
 package com.bluemix.clients_lead.features.expense.presentation
 
+import android.Manifest
 import android.net.Uri
-import timber.log.Timber
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -15,33 +15,39 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.bluemix.clients_lead.domain.model.LocationPlace
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import com.bluemix.clients_lead.core.design.ui.components.textfield.OutlinedTextField
+import com.bluemix.clients_lead.domain.model.LocationPlace
 import com.bluemix.clients_lead.domain.model.TransportMode
 import com.bluemix.clients_lead.features.expense.vm.TripExpenseViewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
+import timber.log.Timber
 import ui.AppTheme
 import ui.components.Text
-import com.bluemix.clients_lead.core.design.ui.components.textfield.OutlinedTextField
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun TripExpenseSheet(
     onDismiss: () -> Unit,
@@ -50,13 +56,34 @@ fun TripExpenseSheet(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
-    var showAddUrlDialog by remember { mutableStateOf(false) }
-    var receiptUrlInput by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
+    var showImagePickerDialog by remember { mutableStateOf(false) }
+    var currentImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Camera permission
+    val cameraPermission = rememberPermissionState(
+        permission = Manifest.permission.CAMERA
+    )
+
+    // Camera launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && currentImageUri != null) {
+            Timber.d("📸 Photo captured: $currentImageUri")
+            viewModel.processAndUploadImage(context, currentImageUri!!)
+        }
+    }
+
+    // Gallery launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let { viewModel.addReceipt(it.toString()) }
+        uri?.let {
+            Timber.d("🖼️ Image selected from gallery: $uri")
+            viewModel.processAndUploadImage(context, it)
+        }
     }
 
     LaunchedEffect(uiState.successMessage) {
@@ -121,7 +148,7 @@ fun TripExpenseSheet(
                             enabled = !uiState.isSubmitting
                         ) {
                             if (uiState.isSubmitting) {
-                                androidx.compose.material3.CircularProgressIndicator(
+                                CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
                                     strokeWidth = 2.dp,
                                     color = Color(0xFF5E92F3)
@@ -164,10 +191,7 @@ fun TripExpenseSheet(
                         }
                     }
 
-                    // ============================================
-// TRIP INFORMATION SECTION - UPDATED
-// ============================================
-
+                    // TRIP INFORMATION SECTION
                     SectionCard(title = "Trip Information") {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
@@ -189,7 +213,7 @@ fun TripExpenseSheet(
                                 },
                                 trailingIcon = {
                                     if (uiState.isLoadingCurrentLocation) {
-                                        androidx.compose.material3.CircularProgressIndicator(
+                                        CircularProgressIndicator(
                                             modifier = Modifier.size(20.dp),
                                             strokeWidth = 2.dp,
                                             color = Color(0xFF5E92F3)
@@ -227,7 +251,7 @@ fun TripExpenseSheet(
                                     },
                                     trailingIcon = {
                                         if (uiState.isSearching) {
-                                            androidx.compose.material3.CircularProgressIndicator(
+                                            CircularProgressIndicator(
                                                 modifier = Modifier.size(20.dp),
                                                 strokeWidth = 2.dp,
                                                 color = Color(0xFF5E92F3)
@@ -300,7 +324,6 @@ fun TripExpenseSheet(
                             }
                         }
                     }
-
 
                     // TRANSPORT MODE SECTION
                     SectionCard(title = "Transport Mode") {
@@ -394,15 +417,18 @@ fun TripExpenseSheet(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            uiState.receiptUrls.forEach { uri ->
+                            uiState.receiptImages.forEach { uri ->  // ✅ Changed from receiptUrls
                                 ReceiptImage(
                                     uri = uri,
                                     onRemove = { viewModel.removeReceipt(uri) }
                                 )
                             }
 
-                            if (uiState.receiptUrls.size < 5) {
-                                AddReceiptButton(onClick = { showAddUrlDialog = true })
+                            if (uiState.receiptImages.size < 5) {  // ✅ Changed from receiptUrls
+                                AddReceiptButton(
+                                    onClick = { showImagePickerDialog = true },
+                                    isProcessing = uiState.isProcessingImage
+                                )
                             }
                         }
                     }
@@ -489,7 +515,7 @@ fun TripExpenseSheet(
                         )
                     ) {
                         if (uiState.isSubmitting) {
-                            androidx.compose.material3.CircularProgressIndicator(
+                            CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 color = Color.White,
                                 strokeWidth = 2.dp
@@ -510,73 +536,42 @@ fun TripExpenseSheet(
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
-
-                    // ADD URL DIALOG
-                    if (showAddUrlDialog) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showAddUrlDialog = false },
-                            containerColor = Color(0xFF1A1A1A),
-                            tonalElevation = 8.dp,
-                            shape = RoundedCornerShape(20.dp),
-                            title = {
-                                Text(
-                                    text = "Attach Receipt URL",
-                                    style = AppTheme.typography.h3,
-                                    color = Color.White
-                                )
-                            },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Text(
-                                        text = "Upload the photo to drive and paste the URL below",
-                                        style = AppTheme.typography.body2,
-                                        color = Color(0xFFB0B0B0)
-                                    )
-
-                                    OutlinedTextField(
-                                        value = receiptUrlInput,
-                                        onValueChange = { receiptUrlInput = it },
-                                        placeholder = { Text("https://example.com/receipt.jpg", color = Color(0xFF606060)) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 56.dp)
-                                    )
-                                }
-                            },
-                            confirmButton = {
-                                TextButton(
-                                    onClick = {
-                                        val url = receiptUrlInput.trim()
-                                        if (url.startsWith("http://") || url.startsWith("https://")) {
-                                            viewModel.addReceipt(url)
-                                        } else {
-                                            viewModel.updateNotes("Invalid image URL")
-                                        }
-                                        receiptUrlInput = ""
-                                        showAddUrlDialog = false
-                                    }
-                                ) {
-                                    Text(
-                                        text = "Add",
-                                        style = AppTheme.typography.button,
-                                        color = Color(0xFF5E92F3)
-                                    )
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showAddUrlDialog = false }) {
-                                    Text(
-                                        text = "Cancel",
-                                        style = AppTheme.typography.button,
-                                        color = Color(0xFF808080)
-                                    )
-                                }
-                            }
-                        )
-                    }
                 }
             }
         }
+    }
+
+    // IMAGE PICKER DIALOG
+    if (showImagePickerDialog) {
+        ImagePickerDialog(
+            onDismiss = { showImagePickerDialog = false },
+            onCameraClick = {
+                showImagePickerDialog = false
+                if (cameraPermission.status.isGranted) {
+                    val photoFile = File(
+                        context.cacheDir,
+                        "temp_photo_${System.currentTimeMillis()}.jpg"
+                    )
+                    currentImageUri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        photoFile
+                    )
+                    cameraLauncher.launch(currentImageUri!!)
+                } else {
+                    cameraPermission.launchPermissionRequest()
+                }
+            },
+            onGalleryClick = {
+                showImagePickerDialog = false
+                galleryLauncher.launch("image/*")
+            }
+        )
+    }
+
+    // IMAGE PROCESSING OVERLAY
+    if (uiState.isProcessingImage) {
+        ImageProcessingOverlay(progress = uiState.imageProcessingProgress)
     }
 }
 
@@ -648,15 +643,16 @@ private fun TransportModeCard(
     }
 }
 
+// OPTION 1: Change the function parameter name (easier)
 @Composable
-private fun ReceiptImage(uri: String, onRemove: () -> Unit) {
+private fun ReceiptImage(uri: String, onRemove: () -> Unit) {  // ✅ Changed parameter name
     Box(
         modifier = Modifier
             .size(80.dp)
             .clip(RoundedCornerShape(12.dp))
     ) {
         AsyncImage(
-            model = uri,
+            model = "data:image/webp;base64,$uri",  // ✅ Use uri instead
             contentDescription = "Receipt",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -680,35 +676,48 @@ private fun ReceiptImage(uri: String, onRemove: () -> Unit) {
 }
 
 @Composable
-private fun AddReceiptButton(onClick: () -> Unit) {
+private fun AddReceiptButton(
+    onClick: () -> Unit,
+    isProcessing: Boolean = false
+) {
     Box(
         modifier = Modifier
             .size(80.dp)
             .clip(RoundedCornerShape(12.dp))
             .border(
                 width = 2.dp,
-                color = Color(0xFF5E92F3).copy(alpha = 0.5f),
+                color = if (isProcessing) Color(0xFF808080) else Color(0xFF5E92F3).copy(alpha = 0.5f),  // ✅ CHANGE THIS LINE
                 shape = RoundedCornerShape(12.dp)
             )
-            .clickable(onClick = onClick)
-            .background(Color(0xFF2962FF).copy(alpha = 0.1f)),
+            .clickable(enabled = !isProcessing, onClick = onClick)  // ✅ ADD enabled = !isProcessing
+            .background(
+                if (isProcessing) Color(0xFF404040) else Color(0xFF2962FF).copy(alpha = 0.1f)  // ✅ CHANGE THIS LINE
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Attach Receipt",
-                tint = Color(0xFF5E92F3),
-                modifier = Modifier.size(28.dp)
-            )
-            Text(
-                text = "Attach",
-                style = AppTheme.typography.label3,
+        if (isProcessing) {  // ✅ ADD THIS ENTIRE IF-ELSE BLOCK
+            CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                strokeWidth = 2.dp,
                 color = Color(0xFF5E92F3)
             )
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Attach Receipt",
+                    tint = Color(0xFF5E92F3),
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "Attach",
+                    style = AppTheme.typography.label3,
+                    color = Color(0xFF5E92F3)
+                )
+            }
         }
     }
 }
@@ -753,3 +762,140 @@ private fun formatDate(timestamp: Long): String {
     return sdf.format(Date(timestamp))
 }
 
+@Composable
+private fun ImagePickerDialog(
+    onDismiss: () -> Unit,
+    onCameraClick: () -> Unit,
+    onGalleryClick: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1A1A),
+        tonalElevation = 8.dp,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "Add Receipt",
+                style = AppTheme.typography.h3,
+                color = Color.White
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Camera Option
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF2A2A2A))
+                        .clickable(onClick = onCameraClick)
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = Color(0xFF5E92F3),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Take Photo",
+                                style = AppTheme.typography.body1,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Use camera to capture receipt",
+                                style = AppTheme.typography.label3,
+                                color = Color(0xFF808080)
+                            )
+                        }
+                    }
+                }
+
+                // Gallery Option
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF2A2A2A))
+                        .clickable(onClick = onGalleryClick)
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = null,
+                            tint = Color(0xFF5E92F3),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Choose from Gallery",
+                                style = AppTheme.typography.body1,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Select existing photo",
+                                style = AppTheme.typography.label3,
+                                color = Color(0xFF808080)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Cancel",
+                    style = AppTheme.typography.button,
+                    color = Color(0xFF808080)
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun ImageProcessingOverlay(progress: String?) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1A1A1A))
+                .padding(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(40.dp),
+                    color = Color(0xFF5E92F3),
+                    strokeWidth = 3.dp
+                )
+                Text(
+                    text = progress ?: "Processing image...",
+                    style = AppTheme.typography.body1,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
