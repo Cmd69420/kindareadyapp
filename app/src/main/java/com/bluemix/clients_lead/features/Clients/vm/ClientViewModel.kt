@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.bluemix.clients_lead.core.common.utils.AppResult
 import com.bluemix.clients_lead.core.network.ApiClientProvider
 import com.bluemix.clients_lead.core.network.ApiEndpoints
+import com.bluemix.clients_lead.core.network.SessionManager
 import com.bluemix.clients_lead.core.network.TokenStorage
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.usecases.CreateClient
@@ -39,7 +40,6 @@ enum class SearchMode {
     REMOTE   // Search across all pincodes
 }
 
-// ✅ SIMPLIFIED: Only need one sort toggle for local mode
 data class ClientsUiState(
     val isLoading: Boolean = false,
     val clients: List<Client> = emptyList(),
@@ -48,7 +48,7 @@ data class ClientsUiState(
     val searchQuery: String = "",
     val searchMode: SearchMode = SearchMode.LOCAL,
     val remoteResults: List<Client> = emptyList(),
-    val sortByDistance: Boolean = false, // ✅ Simple toggle for local mode
+    val sortByDistance: Boolean = false,
     val userLocation: Pair<Double, Double>? = null,
     val isSearching: Boolean = false,
     val isTrackingEnabled: Boolean = false,
@@ -62,6 +62,7 @@ class ClientsViewModel(
     private val getAllClients: GetAllClients,
     private val searchRemoteClients: SearchRemoteClients,
     private val tokenStorage: TokenStorage,
+    private val sessionManager: SessionManager, // ✅ Added SessionManager
     private val getCurrentUserId: GetCurrentUserId,
     private val locationTrackingStateManager: LocationTrackingStateManager,
     private val context: Context,
@@ -122,8 +123,6 @@ class ClientsViewModel(
         }
     }
 
-    // Inside ClientsViewModel class
-
     fun resetCreateState() {
         _uiState.update { currentState ->
             currentState.copy(
@@ -133,7 +132,6 @@ class ClientsViewModel(
         }
     }
 
-    // In ClientsViewModel.kt
     fun createClientAction(
         name: String,
         phone: String?,
@@ -146,7 +144,6 @@ class ClientsViewModel(
             _uiState.update { it.copy(isCreating = true, createError = null, createSuccess = false) }
 
             try {
-                // 👇 Use the injected use case instead of creating new client!
                 when (val result = createClient(name, phone, email, address, pincode, notes)) {
                     is AppResult.Success -> {
                         Timber.d("✅ Client created successfully: ${result.data.name}")
@@ -158,7 +155,6 @@ class ClientsViewModel(
                             )
                         }
 
-                        // Refresh client list
                         loadClients()
                     }
 
@@ -185,7 +181,6 @@ class ClientsViewModel(
             }
         }
     }
-
 
     fun refreshTrackingState() {
         Timber.d("ClientsViewModel: refreshing tracking state from system")
@@ -233,7 +228,6 @@ class ClientsViewModel(
                     val clients = result.data
                     Timber.d("Successfully loaded ${clients.size} clients")
 
-                    // ✅ Apply sorting if enabled
                     val sorted = if (_uiState.value.sortByDistance) {
                         sortClientsByDistance(clients)
                     } else {
@@ -276,11 +270,10 @@ class ClientsViewModel(
             searchMode = mode,
             searchQuery = "",
             remoteResults = emptyList(),
-            sortByDistance = false // Reset sort when switching modes
+            sortByDistance = false
         )
     }
 
-    // ✅ SIMPLIFIED: Toggle distance sorting for LOCAL mode
     fun toggleDistanceSort() {
         val newValue = !_uiState.value.sortByDistance
         Timber.d("Toggle distance sort: $newValue")
@@ -289,7 +282,6 @@ class ClientsViewModel(
             sortByDistance = newValue
         )
 
-        // Re-apply current filter with new sort
         if (_uiState.value.searchMode == SearchMode.LOCAL) {
             val sorted = if (newValue) {
                 sortClientsByDistance(_uiState.value.clients)
@@ -318,7 +310,6 @@ class ClientsViewModel(
 
             when (_uiState.value.searchMode) {
                 SearchMode.LOCAL -> {
-                    // Local search: filter existing clients
                     val filtered = filterClients(
                         _uiState.value.clients,
                         _uiState.value.selectedFilter,
@@ -331,7 +322,6 @@ class ClientsViewModel(
                 }
 
                 SearchMode.REMOTE -> {
-                    // Remote search: query backend with smart detection
                     if (query.isBlank()) {
                         _uiState.value = _uiState.value.copy(
                             remoteResults = emptyList(),
@@ -351,12 +341,10 @@ class ClientsViewModel(
 
                     Timber.d("Performing remote search: '$query'")
 
-                    // ✅ Backend will auto-detect if it's pincode or text
                     when (val result = searchRemoteClients(userId, query, null, null)) {
                         is AppResult.Success -> {
                             Timber.d("Remote search found ${result.data.size} clients")
 
-                            // ✅ ALWAYS sort remote results by distance
                             val sorted = sortClientsByDistance(result.data)
 
                             _uiState.value = _uiState.value.copy(
@@ -378,7 +366,6 @@ class ClientsViewModel(
         }
     }
 
-    // ✅ Sort clients by distance from user
     private fun sortClientsByDistance(clients: List<Client>): List<Client> {
         val userLoc = _uiState.value.userLocation
         if (userLoc == null) {
@@ -452,9 +439,11 @@ class ClientsViewModel(
                     return@launch
                 }
 
+                // ✅ Pass sessionManager to ApiClientProvider
                 val client = ApiClientProvider.create(
                     baseUrl = ApiEndpoints.BASE_URL,
-                    tokenStorage = tokenStorage
+                    tokenStorage = tokenStorage,
+                    sessionManager = sessionManager // ✅ Fixed!
                 )
 
                 val response: HttpResponse = client.submitFormWithBinaryData(

@@ -24,6 +24,10 @@ class SessionManager(
     // Public immutable state - exposed to rest of app
     val authState: StateFlow<AuthUser?> = _authState.asStateFlow()
 
+    // ✅ NEW: Session invalidation state
+    private val _sessionInvalidated = MutableStateFlow(false)
+    val sessionInvalidated: StateFlow<Boolean> = _sessionInvalidated.asStateFlow()
+
     /**
      * Set current authenticated user.
      * Call this after successful login/signup.
@@ -31,6 +35,7 @@ class SessionManager(
     fun setUser(user: AuthUser) {
         Log.d("SessionManager", "👤 SET USER: ${user.email} (id: ${user.id})")
         _authState.value = user
+        _sessionInvalidated.value = false // Reset invalidation flag
     }
 
     /**
@@ -67,12 +72,26 @@ class SessionManager(
     }
 
     /**
-     * Clear session (on logout).
+     * Clear session (on logout or forced logout).
+     *
+     * @param wasInvalidated - true if session was invalidated by server
      */
-    fun clearSession() {
-        Log.d("SessionManager", "🚪 CLEARING SESSION")
+    fun clearSession(wasInvalidated: Boolean = false) {
+        Log.d("SessionManager", "🚪 CLEARING SESSION (invalidated: $wasInvalidated)")
         _authState.value = null
         tokenStorage.clearToken()
+
+        // ✅ Set flag to notify UI to show login screen
+        if (wasInvalidated) {
+            _sessionInvalidated.value = true
+        }
+    }
+
+    /**
+     * Reset session invalidation flag after user has been notified.
+     */
+    fun resetInvalidationFlag() {
+        _sessionInvalidated.value = false
     }
 
     /**

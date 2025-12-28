@@ -19,7 +19,6 @@ data class ApiErrorResponse(
 
 /**
  * Maps Ktor HTTP exceptions to app-specific errors
- * Replaces SupabaseErrorMapper
  */
 suspend fun Throwable.toAppError(): AppError = when (this) {
 
@@ -39,7 +38,20 @@ suspend fun Throwable.toAppError(): AppError = when (this) {
                 cause = this
             )
 
-            401 -> AppError.Unauthorized(cause = this)
+            401 -> {
+                // ✅ Check for session invalidation errors
+                val error = errorBody?.error
+                if (error == "SESSION_INVALIDATED" ||
+                    error == "TRIAL_EXPIRED" ||
+                    error == "AccessTokenRequired") {
+                    AppError.Unauthorized(
+                        message = errorBody?.message ?: "Your session has expired. Please login again.",
+                        cause = this
+                    )
+                } else {
+                    AppError.Unauthorized(cause = this)
+                }
+            }
 
             403 -> AppError.Forbidden(cause = this)
 

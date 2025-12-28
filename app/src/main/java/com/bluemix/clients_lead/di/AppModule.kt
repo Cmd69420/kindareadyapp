@@ -34,7 +34,8 @@ val appModule = module {
     single {
         ApiClientProvider.create(
             baseUrl = ApiEndpoints.BASE_URL,
-            tokenStorage = get()
+            tokenStorage = get(),
+            sessionManager = get()
         )
     }
 

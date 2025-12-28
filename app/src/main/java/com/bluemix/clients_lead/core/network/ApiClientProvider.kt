@@ -13,7 +13,8 @@ object ApiClientProvider {
 
     fun create(
         baseUrl: String,
-        tokenStorage: TokenStorage
+        tokenStorage: TokenStorage,
+        sessionManager: SessionManager // ✅ Added SessionManager parameter
     ): HttpClient = HttpClient(OkHttp) {
 
         // Base URL configuration
@@ -37,6 +38,12 @@ object ApiClientProvider {
                 prettyPrint = false
                 coerceInputValues = true
             })
+        }
+
+        // ✅ NEW: Session invalidation detection
+        sessionInvalidation {
+            // This callback runs when a 401 with SESSION_INVALIDATED is detected
+            sessionManager.clearSession(wasInvalidated = true)
         }
 
         // Logging (set to NONE in production)

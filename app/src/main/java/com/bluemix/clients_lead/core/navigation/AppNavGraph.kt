@@ -1,5 +1,6 @@
 package com.bluemix.clients_lead.core.navigation
 
+import android.widget.Toast
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -8,11 +9,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.bluemix.clients_lead.core.network.SessionManager
 import com.bluemix.clients_lead.features.Clients.presentation.ClientDetailScreen
 import com.bluemix.clients_lead.features.Clients.presentation.ClientsScreen
 import com.bluemix.clients_lead.features.Clients.presentation.CreateClientScreen
@@ -22,15 +27,11 @@ import com.bluemix.clients_lead.features.map.presentation.MapScreen
 import com.bluemix.clients_lead.features.settings.presentation.ProfileScreen
 import com.bluemix.clients_lead.features.timesheet.presentation.ActivityScreen
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import com.bluemix.clients_lead.features.*
 
 /**
  * Main app navigation graph with gate pattern for auth routing.
- *
- * Flow:
- * 1. Gate screen checks authentication status
- * 2. Routes to Auth or Map based on session state
- * 3. Protected screens verify auth status
  */
 @Composable
 fun AppNavHost() {
@@ -41,6 +42,33 @@ fun AppNavHost() {
 
     val sessionVM: SessionViewModel = koinViewModel()
     val session by sessionVM.state.collectAsState()
+
+    // ✅ Inject SessionManager to observe invalidation
+    val sessionManager: SessionManager = koinInject()
+    val sessionInvalidated by sessionManager.sessionInvalidated.collectAsState()
+    val context = LocalContext.current
+
+    // ✅ Remember if we've already shown the logout message
+    var hasShownLogoutMessage by remember { mutableStateOf(false) }
+
+    // ✅ NEW: Observe session invalidation and force logout (with debounce)
+    LaunchedEffect(sessionInvalidated) {
+        if (sessionInvalidated && !hasShownLogoutMessage) {
+            hasShownLogoutMessage = true
+
+            Toast.makeText(
+                context,
+                "You've been logged out from another device",
+                Toast.LENGTH_LONG
+            ).show()
+
+            // Navigate to auth and clear back stack
+            navigationManager.navigateToAuth()
+
+            // Reset the flag
+            sessionManager.resetInvalidationFlag()
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -55,7 +83,7 @@ fun AppNavHost() {
             SplashScreen(isReady = session.isReady)
 
             LaunchedEffect(session) {
-                if (!session.isReady) return@LaunchedEffect   // Wait until restore completed
+                if (!session.isReady) return@LaunchedEffect
 
                 if (session.isAuthenticated) {
                     navigationManager.navigateToMain()
@@ -63,7 +91,6 @@ fun AppNavHost() {
                     navigationManager.navigateToAuth()
                 }
             }
-
         }
 
         // -------- Authentication --------
@@ -187,37 +214,3 @@ private fun ProtectedRoute(
         content()
     }
 }
-
-//@Composable
-//private fun SplashScreen(isReady: Boolean) {
-//    Box(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .background(AppTheme.colors.background),
-//        contentAlignment = Alignment.Center
-//    ) {
-//        AnimatedVisibility(
-//            visible = !isReady,
-//            enter = fadeIn(),
-//            exit = fadeOut()
-//        ) {
-//            Column(
-//                modifier = Modifier
-//                    .wrapContentWidth()
-//                    .wrapContentHeight(),
-//                verticalArrangement = Arrangement.spacedBy(16.dp),
-//                horizontalAlignment = Alignment.CenterHorizontally
-//            ) {
-//                Text(
-//                    text = "Clients Lead",
-//                    style = AppTheme.typography.h2,
-//                    color = AppTheme.colors.text
-//                )
-//                CircularProgressIndicator(
-//                    modifier = Modifier.size(32.dp),
-//                    color = AppTheme.colors.primary
-//                )
-//            }
-//        }
-//    }
-//}

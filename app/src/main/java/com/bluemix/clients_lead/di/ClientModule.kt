@@ -52,7 +52,8 @@ val clientModule = module {
             getCurrentUserId = get(),
             locationTrackingStateManager = get(),
             context = get(),
-            createClient = get()// ✅ NEW: Inject application context
+            createClient = get(),
+            sessionManager = get()// ✅ NEW: Inject application context
         )
     }
 
