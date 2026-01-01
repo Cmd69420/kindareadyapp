@@ -11,11 +11,20 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
-
+import timber.log.Timber
+import com.bluemix.clients_lead.BuildConfig
 
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        // ✅ CRITICAL: Initialize Timber FIRST
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
+        // ✅ Test that Timber works
+        Timber.d("🚀 App Started - Timber is working!")
 
         startKoin {
             androidLogger(Level.ERROR)

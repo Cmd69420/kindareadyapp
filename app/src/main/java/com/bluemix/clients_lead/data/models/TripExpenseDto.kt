@@ -15,6 +15,9 @@ data class TripExpenseDto(
     @SerialName("user_id")
     val userId: String,
 
+    @SerialName("trip_name")
+    val tripName: String? = null,  // ✅ NEW
+
     @SerialName("start_location")
     val startLocation: String,
 
@@ -60,6 +63,9 @@ data class TripExpenseDto(
  */
 @Serializable
 data class TripExpenseCreateDto(
+    @SerialName("trip_name")
+    val tripName: String? = null,  // ✅ NEW: For multi-leg trips
+
     @SerialName("start_location")
     val startLocation: String,
 
@@ -88,9 +94,11 @@ data class TripExpenseCreateDto(
     val receiptImages: List<String> = emptyList(),
 
     @SerialName("client_id")
-    val clientId: String? = null
-)
+    val clientId: String? = null,
 
+    @SerialName("legs")  // ✅ NEW: Multi-leg support
+    val legs: List<TripLegDto>? = null
+)
 /**
  * Response wrapper for expense operations
  */

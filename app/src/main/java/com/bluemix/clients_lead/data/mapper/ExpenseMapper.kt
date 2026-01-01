@@ -16,6 +16,7 @@ fun TripExpenseDto.toDomain(): TripExpense {
     return TripExpense(
         id = id,
         userId = userId,
+        tripName = tripName,
         startLocation = startLocation,
         endLocation = endLocation,
         travelDate = travelDate,
@@ -36,6 +37,7 @@ fun TripExpenseDto.toDomain(): TripExpense {
  */
 fun TripExpense.toCreateDto(): TripExpenseCreateDto {
     return TripExpenseCreateDto(
+        tripName = tripName,
         startLocation = startLocation,
         endLocation = endLocation,
         travelDate = travelDate,
@@ -45,7 +47,8 @@ fun TripExpense.toCreateDto(): TripExpenseCreateDto {
         currency = currency,
         notes = notes,
         receiptImages = receiptImages,
-        clientId = clientId
+        clientId = clientId,
+        legs = legs?.map { it.toDto() }
     )
 }
 

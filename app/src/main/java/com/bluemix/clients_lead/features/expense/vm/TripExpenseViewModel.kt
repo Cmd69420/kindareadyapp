@@ -227,33 +227,49 @@ class TripExpenseViewModel(
     // SUBMIT EXPENSE
     // ============================================
 
+    // Add this to your submitExpense function in TripExpenseViewModel.kt
+
     fun submitExpense(onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             val state = _uiState.value
             val userId = sessionManager.getCurrentUserId()
 
+            // ✅ Enhanced logging
+            Timber.d("📝 SUBMIT EXPENSE CALLED")
+            Timber.d("  User ID: $userId")
+            Timber.d("  Start: ${state.startLocation?.displayName}")
+            Timber.d("  End: ${state.endLocation?.displayName}")
+            Timber.d("  Distance: ${state.distanceKm}")
+            Timber.d("  Amount: ${state.amountSpent}")
+            Timber.d("  Receipts: ${state.receiptImages.size}")
+
             if (userId == null) {
                 _uiState.value = state.copy(error = "User not authenticated")
+                Timber.e("❌ No user ID")
                 return@launch
             }
 
             if (state.startLocation == null) {
                 _uiState.value = state.copy(error = "Start location is required")
+                Timber.e("❌ No start location")
                 return@launch
             }
 
             if (state.endLocation == null) {
                 _uiState.value = state.copy(error = "End location is required")
+                Timber.e("❌ No end location")
                 return@launch
             }
 
             if (state.distanceKm <= 0) {
                 _uiState.value = state.copy(error = "Invalid distance")
+                Timber.e("❌ Invalid distance: ${state.distanceKm}")
                 return@launch
             }
 
             if (state.amountSpent < 0) {
                 _uiState.value = state.copy(error = "Amount cannot be negative")
+                Timber.e("❌ Negative amount: ${state.amountSpent}")
                 return@launch
             }
 
@@ -263,6 +279,7 @@ class TripExpenseViewModel(
                 val expense = TripExpense(
                     id = UUID.randomUUID().toString(),
                     userId = userId,
+                    tripName = null,  // ✅ Single leg trips don't have tripName
                     startLocation = state.startLocation.displayName,
                     endLocation = state.endLocation.displayName,
                     travelDate = state.travelDate,
@@ -272,32 +289,59 @@ class TripExpenseViewModel(
                     notes = state.notes.ifBlank { null },
                     receiptImages = state.receiptImages,
                     clientId = null,
-                    clientName = null
+                    clientName = null,
+                    legs = null  // ✅ Single leg trip
                 )
+
+                // ✅ Log the expense object
+                Timber.d("📤 Submitting expense: $expense")
 
                 when (val result = submitExpense(expense)) {
                     is AppResult.Success -> {
-                        Timber.i("✅ Expense submitted with ${state.receiptImages.size} images")
+                        Timber.i("✅ Expense submitted successfully")
+                        Timber.d("  Response ID: ${result.data.id}")
                         _uiState.value = TripExpenseUiState(
                             successMessage = "Expense submitted successfully!"
                         )
                         onSuccess()
                     }
                     is AppResult.Error -> {
-                        Timber.e("❌ Submit failed: ${result.error.message}")
+                        // ✅ Enhanced error logging
+                        Timber.e("❌ Submit failed")
+                        Timber.e("  Error type: ${result.error::class.simpleName}")
+                        Timber.e("  Error message: ${result.error.message}")
+                        Timber.e("  Error cause: ${result.error.cause?.message}")
+
+                        // ✅ Show specific error details to user
+                        val errorMessage = when (result.error) {
+                            is com.bluemix.clients_lead.core.common.utils.AppError.Validation -> {
+                                "Validation error: ${result.error.message}"
+                            }
+                            is com.bluemix.clients_lead.core.common.utils.AppError.Network -> {
+                                "Network error: ${result.error.message}"
+                            }
+                            is com.bluemix.clients_lead.core.common.utils.AppError.Unauthorized -> {
+                                "Session expired. Please login again."
+                            }
+                            else -> result.error.message ?: "Submission failed"
+                        }
+
                         _uiState.value = state.copy(
                             isSubmitting = false,
-                            error = result.error.message ?: "Submission failed"
+                            error = errorMessage
                         )
                     }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "❌ Exception during submit")
+                Timber.e("  Exception type: ${e::class.simpleName}")
+                Timber.e("  Exception message: ${e.message}")
+                Timber.e("  Stack trace: ${e.stackTraceToString()}")
+
                 _uiState.value = state.copy(
                     isSubmitting = false,
-                    error = e.message ?: "Unexpected error"
+                    error = "Error: ${e.message}"
                 )
-
             }
         }
     }
