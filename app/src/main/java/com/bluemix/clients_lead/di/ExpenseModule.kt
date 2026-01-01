@@ -16,6 +16,7 @@ import kotlinx.serialization.json.Json
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
+import com.bluemix.clients_lead.features.expense.vm.MultiLegExpenseViewModel
 
 val expenseModule = module {
     // Repository
@@ -71,6 +72,14 @@ val expenseModule = module {
             uploadReceipt = get(),
             sessionManager = get(),
             locationSearchRepo = get() // ✅ NEW
+        )
+    }
+
+    viewModel {
+        MultiLegExpenseViewModel(
+            submitExpense = get(),
+            sessionManager = get(),
+            locationSearchRepo = get()
         )
     }
 }

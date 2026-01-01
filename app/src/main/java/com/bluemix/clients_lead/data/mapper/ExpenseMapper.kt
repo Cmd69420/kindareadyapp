@@ -4,6 +4,10 @@ import com.bluemix.clients_lead.data.models.TripExpenseCreateDto
 import com.bluemix.clients_lead.data.models.TripExpenseDto
 import com.bluemix.clients_lead.domain.model.TransportMode
 import com.bluemix.clients_lead.domain.model.TripExpense
+import com.bluemix.clients_lead.data.models.MultiLegExpenseCreateDto
+import com.bluemix.clients_lead.domain.model.TripLeg
+import com.bluemix.clients_lead.data.models.TripLegDto
+
 
 /**
  * Maps DTO to Domain model
@@ -56,13 +60,12 @@ private fun String.toTransportMode(): TransportMode {
         "RICKSHAW" -> TransportMode.RICKSHAW
         "CAR" -> TransportMode.CAR
         "TAXI" -> TransportMode.TAXI
-        else -> TransportMode.BUS // Default
+        "FLIGHT" -> TransportMode.FLIGHT  // NEW
+        "METRO" -> TransportMode.METRO    // NEW
+        else -> TransportMode.BUS
     }
 }
 
-/**
- * Convert TransportMode enum to API string
- */
 private fun TransportMode.toApiString(): String {
     return when (this) {
         TransportMode.BUS -> "BUS"
@@ -71,5 +74,58 @@ private fun TransportMode.toApiString(): String {
         TransportMode.RICKSHAW -> "RICKSHAW"
         TransportMode.CAR -> "CAR"
         TransportMode.TAXI -> "TAXI"
+        TransportMode.FLIGHT -> "FLIGHT"  // NEW
+        TransportMode.METRO -> "METRO"    // NEW
     }
+}
+
+/**
+ * NEW: Map TripLeg domain to DTO
+ */
+fun TripLeg.toDto(): TripLegDto {
+    return TripLegDto(
+        id = id,
+        startLocation = startLocation,
+        endLocation = endLocation,
+        distanceKm = distanceKm,
+        transportMode = transportMode.toApiString(),
+        amountSpent = amountSpent,
+        notes = notes,
+        legNumber = legNumber
+    )
+}
+
+/**
+ * NEW: Map TripLegDto to domain
+ */
+fun TripLegDto.toDomain(): TripLeg {
+    return TripLeg(
+        id = id,
+        startLocation = startLocation,
+        endLocation = endLocation,
+        distanceKm = distanceKm,
+        transportMode = transportMode.toTransportMode(),
+        amountSpent = amountSpent,
+        notes = notes,
+        legNumber = legNumber
+    )
+}
+
+/**
+ * NEW: Map multi-leg domain expense to create DTO
+ */
+fun TripExpense.toMultiLegCreateDto(): MultiLegExpenseCreateDto? {
+    if (legs.isNullOrEmpty()) return null
+
+    return MultiLegExpenseCreateDto(
+        tripName = tripName ?: "Multi-Leg Trip",
+        travelDate = travelDate,
+        legs = legs.map { it.toDto() },
+        totalDistanceKm = legs.sumOf { it.distanceKm },
+        totalAmountSpent = legs.sumOf { it.amountSpent },
+        currency = currency,
+        notes = notes,
+        receiptImages = receiptImages,
+        clientId = clientId
+    )
 }

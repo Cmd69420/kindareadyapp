@@ -129,3 +129,66 @@ data class ReceiptUploadResponse(
     @SerialName("fileName")
     val fileName: String
 )
+
+/**
+ * NEW: DTO for individual trip legs
+ */
+@Serializable
+data class TripLegDto(
+    @SerialName("id")
+    val id: String,
+
+    @SerialName("start_location")
+    val startLocation: String,
+
+    @SerialName("end_location")
+    val endLocation: String,
+
+    @SerialName("distance_km")
+    val distanceKm: Double,
+
+    @SerialName("transport_mode")
+    val transportMode: String,
+
+    @SerialName("amount_spent")
+    val amountSpent: Double,
+
+    @SerialName("notes")
+    val notes: String? = null,
+
+    @SerialName("leg_number")
+    val legNumber: Int
+)
+
+/**
+ * NEW: Multi-leg expense create request
+ */
+@Serializable
+data class MultiLegExpenseCreateDto(
+    @SerialName("trip_name")
+    val tripName: String,
+
+    @SerialName("travel_date")
+    val travelDate: Long,
+
+    @SerialName("legs")
+    val legs: List<TripLegDto>,
+
+    @SerialName("total_distance_km")
+    val totalDistanceKm: Double,
+
+    @SerialName("total_amount_spent")
+    val totalAmountSpent: Double,
+
+    @SerialName("currency")
+    val currency: String = "₹",
+
+    @SerialName("notes")
+    val notes: String? = null,
+
+    @SerialName("receipt_images")
+    val receiptImages: List<String> = emptyList(),
+
+    @SerialName("client_id")
+    val clientId: String? = null
+)

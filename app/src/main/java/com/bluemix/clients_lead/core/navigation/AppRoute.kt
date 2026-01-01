@@ -34,5 +34,9 @@ sealed class Route {
     data object ExpenseForm : Route()
 
     @Serializable
+    data object MultiLegExpenseForm : Route()
+
+
+    @Serializable
     data object CreateClient : Route()
 }

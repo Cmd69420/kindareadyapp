@@ -85,6 +85,7 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.bluemix.clients_lead.features.meeting.presentation.MeetingBottomSheet
 import com.bluemix.clients_lead.features.meeting.utils.ProximityDetector
 import com.bluemix.clients_lead.features.meeting.vm.MeetingViewModel
+import com.bluemix.clients_lead.features.expense.presentation.MultiLegTripExpenseSheet
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
 import ui.components.Scaffold
@@ -115,7 +116,9 @@ fun MapScreen(
     var proximityClient by remember { mutableStateOf<Client?>(null) }
     var lastProximityCheck by remember { mutableStateOf(0L) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var showExpenseSheet by remember { mutableStateOf(false) }
+    var showExpenseTypeDialog by remember { mutableStateOf(false) }
+    var showSingleLegExpense by remember { mutableStateOf(false) }
+    var showMultiLegExpense by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
     var hasAutoFocusedOnUser by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -533,10 +536,45 @@ fun MapScreen(
                     exit = scaleOut() + fadeOut()
                 ) {
                     ui.components.FloatingActionButton(
-                        onClick = { showExpenseSheet = true },
+                        onClick = { showExpenseTypeDialog = true },
                         icon = Icons.Default.Receipt,
                         contentDescription = "Add Trip Expense"
                     )
+                    if (showExpenseTypeDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showExpenseTypeDialog = false },
+                            title = { Text("Add Expense") },
+                            text = {
+                                Column {
+                                    TextButton(
+                                        onClick = {
+                                            showExpenseTypeDialog = false
+                                            showSingleLegExpense = true
+                                        }
+                                    ) {
+                                        Text("🚌 Single Trip")
+                                    }
+
+                                    TextButton(
+                                        onClick = {
+                                            showExpenseTypeDialog = false
+                                            showMultiLegExpense = true
+                                        }
+                                    ) {
+                                        Text("✈️ Multi-Leg Journey")
+                                    }
+                                }
+                            },
+                            confirmButton = {},
+                            dismissButton = {
+                                TextButton(onClick = { showExpenseTypeDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+
                 }
 
                 // Permission Prompt
@@ -572,11 +610,18 @@ fun MapScreen(
         }
 
         // Expense Sheet Modal
-        if (showExpenseSheet) {
+        if (showSingleLegExpense) {
             TripExpenseSheet(
-                onDismiss = { showExpenseSheet = false }
+                onDismiss = { showSingleLegExpense = false }
             )
         }
+
+        if (showMultiLegExpense) {
+            MultiLegTripExpenseSheet(
+                onDismiss = { showMultiLegExpense = false }
+            )
+        }
+
     }
 
     LaunchedEffect(meetingUiState.error) {
