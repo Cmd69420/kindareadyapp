@@ -12,13 +12,15 @@ fun ClientDto.toDomain(): Client {
         address = address,
         latitude = latitude,
         longitude = longitude,
-        pincode = pincode,// ✅ NEW: Map pincode
+        pincode = pincode,
         hasLocation = hasLocation,
         status = status,
         notes = notes,
         createdBy = createdBy,
         createdAt = createdAt,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        lastVisitDate = lastVisitDate,
+        lastVisitNotes = lastVisitNotes
     )
 }
 

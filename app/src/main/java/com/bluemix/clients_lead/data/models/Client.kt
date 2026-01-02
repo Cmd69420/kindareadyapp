@@ -22,5 +22,11 @@ data class ClientDto(
     val createdAt: String,
     @SerialName("updated_at")
     val updatedAt: String,
-    val pincode: String? = null // ✅ NEW: Add pincode
+    val pincode: String? = null,
+
+    // New fields for last visit tracking
+    @SerialName("last_visit_date")
+    val lastVisitDate: String? = null,
+    @SerialName("last_visit_notes")
+    val lastVisitNotes: String? = null
 )

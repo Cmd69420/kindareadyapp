@@ -1,25 +1,25 @@
 package com.bluemix.clients_lead.features.map.presentation
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.zIndex
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.animation.scaleIn
-import timber.log.Timber
 import androidx.compose.animation.scaleOut
-import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.background
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,41 +32,57 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.style.TextAlign
-import android.app.Activity
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.bluemix.clients_lead.domain.model.Client
-import com.bluemix.clients_lead.features.location.LocationSettingsMonitor
+import com.bluemix.clients_lead.domain.model.VisitStatus
+import com.bluemix.clients_lead.features.expense.presentation.MultiLegTripExpenseSheet
 import com.bluemix.clients_lead.features.expense.presentation.TripExpenseSheet
+import com.bluemix.clients_lead.features.location.LocationSettingsMonitor
 import com.bluemix.clients_lead.features.map.vm.MapViewModel
+import com.bluemix.clients_lead.features.meeting.presentation.MeetingBottomSheet
+import com.bluemix.clients_lead.features.meeting.utils.ProximityDetector
+import com.bluemix.clients_lead.features.meeting.vm.MeetingViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -82,21 +98,13 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.bluemix.clients_lead.features.meeting.presentation.MeetingBottomSheet
-import com.bluemix.clients_lead.features.meeting.utils.ProximityDetector
-import com.bluemix.clients_lead.features.meeting.vm.MeetingViewModel
-import com.bluemix.clients_lead.features.expense.presentation.MultiLegTripExpenseSheet
 import org.koin.androidx.compose.koinViewModel
+import timber.log.Timber
 import ui.AppTheme
 import ui.components.Scaffold
 import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
-import android.provider.Settings
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.material3.AlertDialog
-import android.content.Intent
-
 
 
 
@@ -323,18 +331,31 @@ fun MapScreen(
                             if (client.latitude != null && client.longitude != null) {
                                 val position = LatLng(client.latitude, client.longitude)
 
+                                // Determine marker color based on visit status
+                                val markerColor = when (client.getVisitStatusColor()) {
+                                    VisitStatus.NEVER_VISITED -> BitmapDescriptorFactory.HUE_RED      // Red - Never visited
+                                    VisitStatus.RECENT -> BitmapDescriptorFactory.HUE_GREEN           // Green - Recent visit (<7 days)
+                                    VisitStatus.MODERATE -> BitmapDescriptorFactory.HUE_YELLOW        // Yellow - Moderate (7-30 days)
+                                    VisitStatus.OVERDUE -> BitmapDescriptorFactory.HUE_ORANGE         // Orange - Overdue (30+ days)
+                                }
+
+                                // Create snippet with visit info
+                                val visitInfo = client.getFormattedLastVisit()?.let { "Last visit: $it" }
+                                    ?: "Never visited"
+
+                                val snippet = buildString {
+                                    append(visitInfo)
+                                    client.address?.let {
+                                        append(" • ")
+                                        append(it)
+                                    }
+                                }
+
                                 Marker(
                                     state = MarkerState(position = position),
                                     title = client.name,
-                                    snippet = client.address ?: "No address",
-                                    icon = BitmapDescriptorFactory.defaultMarker(
-                                        when (client.status) {
-                                            "active" -> BitmapDescriptorFactory.HUE_GREEN
-                                            "inactive" -> BitmapDescriptorFactory.HUE_AZURE
-                                            "completed" -> BitmapDescriptorFactory.HUE_BLUE
-                                            else -> BitmapDescriptorFactory.HUE_RED
-                                        }
-                                    ),
+                                    snippet = snippet,
+                                    icon = BitmapDescriptorFactory.defaultMarker(markerColor),
                                     onClick = {
                                         viewModel.selectClient(client)
                                         true
@@ -524,6 +545,22 @@ fun MapScreen(
                             )
                         }
                     }
+                }
+
+                var isLegendExpanded by remember { mutableStateOf(false) }
+
+                AnimatedVisibility(
+                    visible = uiState.isTrackingEnabled,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 120.dp, end = 16.dp),
+                    enter = fadeIn() + slideInHorizontally { it },
+                    exit = fadeOut() + slideOutHorizontally { it }
+                ) {
+                    MapLegend(
+                        isExpanded = isLegendExpanded,
+                        onToggle = { isLegendExpanded = !isLegendExpanded }
+                    )
                 }
 
                 // Floating Action Button - Changed to Receipt icon
@@ -971,5 +1008,84 @@ private fun AnimatedPermissionPrompt(
                 )
             }
         }
+    }
+}
+
+
+@Composable
+private fun MapLegend(
+    modifier: Modifier = Modifier,
+    isExpanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppTheme.colors.surface.copy(alpha = 0.95f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Map Legend",
+                style = AppTheme.typography.label1,
+                color = AppTheme.colors.text,
+                fontWeight = FontWeight.Bold
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = AppTheme.colors.textSecondary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        AnimatedVisibility(visible = isExpanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LegendItem(
+                    color = Color(0xFFEA4335),  // Red
+                    label = "Never visited"
+                )
+                LegendItem(
+                    color = Color(0xFF34A853),  // Green
+                    label = "Recent (< 7 days)"
+                )
+                LegendItem(
+                    color = Color(0xFFFBBC04),  // Yellow
+                    label = "Moderate (7-30 days)"
+                )
+                LegendItem(
+                    color = Color(0xFFFF6D00),  // Orange
+                    label = "Overdue (30+ days)"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(color: Color, label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Text(
+            text = label,
+            style = AppTheme.typography.body2,
+            color = AppTheme.colors.textSecondary,
+            fontSize = 12.sp
+        )
     }
 }

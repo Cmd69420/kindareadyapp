@@ -74,6 +74,7 @@ import ui.components.Scaffold
 import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
+import com.bluemix.clients_lead.features.Clients.presentation.components.LastVisitCardgit
 
 /**
  * Client detail screen following proper ViewModel patterns.
@@ -270,6 +271,12 @@ private fun AnimatedClientDetailContent(
     ) {
         // Animated Header Card
         AnimatedHeaderCard(client = client)
+
+        LastVisitCard(
+            client = client,
+            onViewHistory = { /* Navigate to history */ },
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // Contact Information Section
         AnimatedSection(
