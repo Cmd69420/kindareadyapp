@@ -150,38 +150,46 @@ class ProfileViewModel(
 
     fun updateName(newName: String) {
         viewModelScope.launch {
-            val userId = getCurrentUserId() ?: return@launch
+            val userId = getCurrentUserId() ?: return@launch run {
+                _uiState.update {
+                    it.copy(
+                        isUpdatingName = false,
+                        showNameDialog = false,
+                        error = "User not authenticated"
+                    )
+                }
+            }
 
-            _uiState.update { it.copy(isUpdatingName = true) }
+            _uiState.update { it.copy(isUpdatingName = true, error = null) }
 
             when (
                 val result = updateUserProfile(
                     userId = userId,
-                    fullName = newName,
+                    fullName = newName.trim(),
                     department = _uiState.value.profile?.department,
                     workHoursStart = _uiState.value.profile?.workHoursStart,
                     workHoursEnd = _uiState.value.profile?.workHoursEnd
                 )
             ) {
                 is AppResult.Success -> {
-                    // 🔴 DO NOT trust result.data
-                    loadProfile() // ✅ REFRESH FROM SOURCE OF TRUTH
-
+                    Timber.d("✅ Name updated successfully")
                     _uiState.update {
                         it.copy(
                             isUpdatingName = false,
-                            showNameDialog = false
+                            showNameDialog = false,
+                            profile = result.data,
+                            error = null
                         )
                     }
-
-                    Timber.d("✅ Name updated, profile refreshed")
                 }
 
                 is AppResult.Error -> {
+                    Timber.e("❌ Failed to update name: ${result.error.message}")
                     _uiState.update {
                         it.copy(
                             isUpdatingName = false,
-                            error = result.error.message ?: "Failed to update name"
+                            showNameDialog = false, // ← Close dialog even on error
+                            error = result.error.message ?: "Failed to update name. Please try again."
                         )
                     }
                 }

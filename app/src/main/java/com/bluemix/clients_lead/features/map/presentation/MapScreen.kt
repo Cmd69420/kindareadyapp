@@ -620,32 +620,74 @@ fun MapScreen(
                     if (showExpenseTypeDialog) {
                         AlertDialog(
                             onDismissRequest = { showExpenseTypeDialog = false },
-                            title = { Text("Add Expense") },
+                            containerColor = AppTheme.colors.surface,
+                            shape = RoundedCornerShape(24.dp),
+                            title = {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Receipt,
+                                        contentDescription = null,
+                                        tint = AppTheme.colors.primary,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "Add Trip Expense",
+                                        style = AppTheme.typography.h3,
+                                        color = AppTheme.colors.text,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Choose your trip type",
+                                        style = AppTheme.typography.body2,
+                                        color = AppTheme.colors.textSecondary,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            },
                             text = {
-                                Column {
-                                    TextButton(
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    // Single Trip Option
+                                    ExpenseTypeCard(
+                                        icon = "🚌",
+                                        title = "Single Trip",
+                                        description = "One-way journey with single transport",
                                         onClick = {
                                             showExpenseTypeDialog = false
                                             showSingleLegExpense = true
                                         }
-                                    ) {
-                                        Text("🚌 Single Trip")
-                                    }
+                                    )
 
-                                    TextButton(
+                                    // Multi-Leg Journey Option
+                                    ExpenseTypeCard(
+                                        icon = "✈️",
+                                        title = "Multi-Leg Journey",
+                                        description = "Multiple transports in one trip",
                                         onClick = {
                                             showExpenseTypeDialog = false
                                             showMultiLegExpense = true
                                         }
-                                    ) {
-                                        Text("✈️ Multi-Leg Journey")
-                                    }
+                                    )
                                 }
                             },
                             confirmButton = {},
                             dismissButton = {
-                                TextButton(onClick = { showExpenseTypeDialog = false }) {
-                                    Text("Cancel")
+                                TextButton(
+                                    onClick = { showExpenseTypeDialog = false },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Cancel",
+                                        style = AppTheme.typography.button,
+                                        color = AppTheme.colors.textSecondary
+                                    )
                                 }
                             }
                         )
@@ -1481,6 +1523,71 @@ private fun EnhancedLegendItem(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+@Composable
+private fun ExpenseTypeCard(
+    icon: String,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(80.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = AppTheme.colors.background,
+            contentColor = AppTheme.colors.text
+        ),
+        border = BorderStroke(1.dp, AppTheme.colors.primary.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icon
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(AppTheme.colors.primary.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = icon,
+                    fontSize = 24.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Text Content
+            Column(
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = title,
+                    style = AppTheme.typography.body1,
+                    color = AppTheme.colors.text,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = AppTheme.typography.body2,
+                    color = AppTheme.colors.textSecondary,
+                    fontSize = 12.sp
+                )
+            }
         }
     }
 }

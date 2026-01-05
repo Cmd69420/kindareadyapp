@@ -134,11 +134,11 @@ private data class BackendClientData(
     val hasLocation: Boolean = false,
     val status: String = "active",
     val notes: String? = null,
-    val createdBy: String,
+    val createdBy: String? = null,  // ✅ CHANGE THIS to nullable
     val createdAt: String,
     val updatedAt: String,
     val lastVisitDate: String? = null,
-    val lastVisitType: String? = null,  // ← ADD THIS
+    val lastVisitType: String? = null,
     val lastVisitNotes: String? = null
 )
 
@@ -154,10 +154,10 @@ private fun BackendClientData.toClient() = Client(
     hasLocation = hasLocation,
     status = status,
     notes = notes,
-    createdBy = createdBy,
+    createdBy = createdBy ?: "",  // ✅ ADD null-safe operator with default
     createdAt = createdAt,
     updatedAt = updatedAt,
     lastVisitDate = lastVisitDate,
-    lastVisitType = lastVisitType,  // ← ADD THIS
+    lastVisitType = lastVisitType,
     lastVisitNotes = lastVisitNotes
 )

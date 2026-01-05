@@ -211,6 +211,7 @@ data class BackendClient(
     val updatedAt: String? = null,
     // ✅ ADD THESE FIELDS
     val lastVisitDate: String? = null,
+    val lastVisitType: String? = null,  // ← ADD THIS LINE
     val lastVisitNotes: String? = null
 )
 

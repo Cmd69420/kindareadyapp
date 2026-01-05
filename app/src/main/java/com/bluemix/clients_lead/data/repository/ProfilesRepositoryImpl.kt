@@ -65,6 +65,8 @@ class ProfileRepositoryImpl(
         workHoursEnd: String?
     ): AppResult<UserProfile> = withContext(Dispatchers.IO) {
         runAppCatching(mapper = { it.toAppError() }) {
+            Timber.tag(TAG).d("Updating profile for userId: $userId")
+
             val response = httpClient.put(ApiEndpoints.Auth.PROFILE) {
                 setBody(
                     UpdateProfileRequest(
@@ -76,8 +78,17 @@ class ProfileRepositoryImpl(
                 )
             }.body<UpdateProfileResponse>()
 
-            // Convert backend profile data to ProfileDto
+            Timber.tag(TAG).d("Update response: ${response.message}")
+
             response.profile.toProfileDto().toDomain()
+        }.also { result ->
+            when (result) {
+                is AppResult.Success -> Timber.tag(TAG).d("Profile updated successfully")
+                is AppResult.Error -> Timber.tag(TAG).e(
+                    result.error.cause,
+                    "Failed to update profile: ${result.error.message}"
+                )
+            }
         }
     }
 
@@ -175,13 +186,13 @@ fun BackendUserProfile.toProfileDto(): ProfileDto {
  */
 fun BackendProfileData.toProfileDto(): ProfileDto {
     return ProfileDto(
-        id = this.userId,
+        id = this.userId, // or this.id - check what your backend actually returns
         email = this.email,
         fullName = this.fullName,
         department = this.department,
         workHoursStart = this.workHoursStart,
         workHoursEnd = this.workHoursEnd,
-        createdAt = "",
+        createdAt = "", // Add proper timestamp if available
         updatedAt = null
     )
 }
