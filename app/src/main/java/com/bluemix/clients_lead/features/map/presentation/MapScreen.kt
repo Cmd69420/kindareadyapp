@@ -269,6 +269,7 @@ fun MapScreen(
                         showMeetingSheet = true
                         meetingViewModel.checkActiveMeeting(client.id)
                     }
+
                 }
             }
         }
@@ -327,6 +328,8 @@ fun MapScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
+                // In MapScreen.kt, replace the GoogleMap marker rendering section:
+
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
                     cameraPositionState = cameraPositionState,
@@ -342,24 +345,42 @@ fun MapScreen(
                     )
                 ) {
                     if (uiState.isTrackingEnabled) {
-                        uiState.clients.forEach { client ->
+                        Timber.d("🗺️ RENDERING MARKERS - Total clients: ${uiState.clients.size}")
+
+                        uiState.clients.forEachIndexed { index, client ->
                             if (client.latitude != null && client.longitude != null) {
                                 val visitStatus = client.getVisitStatusColor()
 
-                                // 🔹 FILTER CHECK
+                                Timber.d("📍 Marker #$index: ${client.name}")
+                                Timber.d("   - ID: ${client.id}")
+                                Timber.d("   - Last Visit Date: ${client.lastVisitDate}")
+                                Timber.d("   - Visit Status: $visitStatus")
+                                Timber.d("   - Filtered: ${filteredStatuses.contains(visitStatus)}")
+
                                 if (filteredStatuses.contains(visitStatus)) {
                                     val position = LatLng(client.latitude, client.longitude)
 
                                     val markerColor = when (visitStatus) {
-                                        VisitStatus.NEVER_VISITED -> BitmapDescriptorFactory.HUE_RED
-                                        VisitStatus.RECENT -> BitmapDescriptorFactory.HUE_GREEN
-                                        VisitStatus.MODERATE -> BitmapDescriptorFactory.HUE_YELLOW
-                                        VisitStatus.OVERDUE -> BitmapDescriptorFactory.HUE_ORANGE
+                                        VisitStatus.NEVER_VISITED -> {
+                                            Timber.d("   - Color: RED")
+                                            BitmapDescriptorFactory.HUE_RED
+                                        }
+                                        VisitStatus.RECENT -> {
+                                            Timber.d("   - Color: GREEN")
+                                            BitmapDescriptorFactory.HUE_GREEN
+                                        }
+                                        VisitStatus.MODERATE -> {
+                                            Timber.d("   - Color: YELLOW")
+                                            BitmapDescriptorFactory.HUE_YELLOW
+                                        }
+                                        VisitStatus.OVERDUE -> {
+                                            Timber.d("   - Color: ORANGE")
+                                            BitmapDescriptorFactory.HUE_ORANGE
+                                        }
                                     }
 
-                                    val visitInfo =
-                                        client.getFormattedLastVisit()?.let { "Last visit: $it" }
-                                            ?: "Never visited"
+                                    val visitInfo = client.getFormattedLastVisit()?.let { "Last visit: $it" }
+                                        ?: "Never visited"
 
                                     val snippet = buildString {
                                         append(visitInfo)
@@ -369,21 +390,29 @@ fun MapScreen(
                                         }
                                     }
 
-                                    Marker(
-                                        state = MarkerState(position = position),
-                                        title = client.name,
-                                        snippet = snippet,
-                                        icon = BitmapDescriptorFactory.defaultMarker(markerColor),
-                                        onClick = {
-                                            viewModel.selectClient(client)
-                                            true
-                                        }
-                                    )
+                                    // ✅ Use key to force recomposition when lastVisitDate changes
+                                    androidx.compose.runtime.key(client.id, client.lastVisitDate) {
+                                        Timber.d("   - Rendering with key: ${client.id}, ${client.lastVisitDate}")
+
+                                        Marker(
+                                            state = MarkerState(position = position),
+                                            title = client.name,
+                                            snippet = snippet,
+                                            icon = BitmapDescriptorFactory.defaultMarker(markerColor),
+                                            onClick = {
+                                                Timber.d("📍 Marker clicked: ${client.name}")
+                                                viewModel.selectClient(client)
+                                                true
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
+
+                        Timber.d("🗺️ MARKER RENDERING COMPLETE")
                     }
-                    }
+                }
 
                 // Meeting Bottom Sheet - Highest priority (z-index 2)
                 AnimatedVisibility(
@@ -417,6 +446,7 @@ fun MapScreen(
                                 showMeetingSheet = false
                                 proximityClient = null
                             }
+
                         )
                     }
                 }
@@ -441,7 +471,13 @@ fun MapScreen(
                                 proximityClient = client
                                 showMeetingSheet = true
                                 meetingViewModel.checkActiveMeeting(client.id)
+                            },
+                            onQuickVisit = { visitType ->  // ✅ ADD THIS
+                                viewModel.updateQuickVisitStatus(client.id, visitType)
                             }
+
+
+
                         )
                     }
                 }

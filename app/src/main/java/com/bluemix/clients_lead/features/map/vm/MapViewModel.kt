@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import com.bluemix.clients_lead.domain.usecases.CreateQuickVisit
 
 data class MapUiState(
     val isLoading: Boolean = false,
@@ -38,7 +39,8 @@ data class MapUiState(
 class MapViewModel(
     private val getClientsWithLocation: GetClientsWithLocation,
     private val getCurrentUserId: GetCurrentUserId,
-    private val locationTrackingStateManager: LocationTrackingStateManager
+    private val locationTrackingStateManager: LocationTrackingStateManager,
+    private val createQuickVisit: CreateQuickVisit
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
@@ -262,38 +264,133 @@ class MapViewModel(
     }
 
 
-    fun updateQuickVisitStatus(clientId: String, visitType: String) {
+    // features/map/vm/MapViewModel.kt
+    fun updateQuickVisitStatus(clientId: String, visitType: String, notes: String? = null) {
         viewModelScope.launch {
             try {
                 val currentLocation = _uiState.value.currentLocation
 
-                // Call your API service
-                val response = apiService.createQuickVisit(
+                if (currentLocation == null) {
+                    Timber.w("Cannot record quick visit: location not available")
+                    _uiState.value = _uiState.value.copy(
+                        error = "Location not available. Please enable location services."
+                    )
+                    return@launch
+                }
+
+                Timber.d("═══════════════════════════════════════")
+                Timber.d("🎯 QUICK VISIT UPDATE STARTED")
+                Timber.d("═══════════════════════════════════════")
+                Timber.d("📍 Client ID: $clientId")
+                Timber.d("📍 Visit Type: $visitType")
+                Timber.d("📍 Location: ${currentLocation.latitude}, ${currentLocation.longitude}")
+
+                // Log BEFORE state
+                val clientBefore = _uiState.value.clients.find { it.id == clientId }
+                Timber.d("📊 CLIENT STATE BEFORE:")
+                Timber.d("   - Name: ${clientBefore?.name}")
+                Timber.d("   - Last Visit Date (BEFORE): ${clientBefore?.lastVisitDate}")
+                Timber.d("   - Last Visit Notes (BEFORE): ${clientBefore?.lastVisitNotes}")
+                Timber.d("   - Visit Status (BEFORE): ${clientBefore?.getVisitStatusColor()}")
+
+                when (val result = createQuickVisit(
                     clientId = clientId,
                     visitType = visitType,
-                    latitude = currentLocation?.latitude,
-                    longitude = currentLocation?.longitude,
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
                     accuracy = null,
-                    notes = null
-                )
+                    notes = notes
+                )) {
+                    is AppResult.Success -> {
+                        val updatedClient = result.data
 
-                if (response.isSuccessful) {
-                    Timber.d("Quick visit recorded: $visitType for client $clientId")
-                    // Refresh clients to update last visit info
-                    loadClients()
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        error = "Failed to record visit"
-                    )
+                        Timber.d("═══════════════════════════════════════")
+                        Timber.d("✅ API RETURNED SUCCESS")
+                        Timber.d("═══════════════════════════════════════")
+                        Timber.d("📦 UPDATED CLIENT DATA FROM API:")
+                        Timber.d("   - Client ID: ${updatedClient.id}")
+                        Timber.d("   - Name: ${updatedClient.name}")
+                        Timber.d("   - Last Visit Date (NEW): ${updatedClient.lastVisitDate}")
+                        Timber.d("   - Last Visit Notes (NEW): ${updatedClient.lastVisitNotes}")
+                        Timber.d("   - Visit Status (NEW): ${updatedClient.getVisitStatusColor()}")
+                        Timber.d("   - Has Location: ${updatedClient.hasLocation}")
+
+                        // Update the client list
+                        val currentClients = _uiState.value.clients
+                        Timber.d("📊 CURRENT CLIENT LIST SIZE: ${currentClients.size}")
+
+                        val updatedClients = currentClients.map { client ->
+                            if (client.id == updatedClient.id) {
+                                Timber.d("🔄 REPLACING CLIENT: ${client.name}")
+                                Timber.d("   - OLD lastVisitDate: ${client.lastVisitDate}")
+                                Timber.d("   - NEW lastVisitDate: ${updatedClient.lastVisitDate}")
+                                updatedClient
+                            } else {
+                                client
+                            }
+                        }
+
+                        Timber.d("📊 UPDATED CLIENT LIST SIZE: ${updatedClients.size}")
+
+                        // Verify the replacement worked
+                        val replacedClient = updatedClients.find { it.id == clientId }
+                        Timber.d("🔍 VERIFICATION - Client in new list:")
+                        Timber.d("   - Name: ${replacedClient?.name}")
+                        Timber.d("   - Last Visit Date: ${replacedClient?.lastVisitDate}")
+                        Timber.d("   - Visit Status: ${replacedClient?.getVisitStatusColor()}")
+
+                        // Update UI state
+                        Timber.d("🔄 UPDATING UI STATE...")
+                        _uiState.value = _uiState.value.copy(
+                            clients = updatedClients,
+                            selectedClient = null,
+                            error = null
+                        )
+
+                        // Verify state was updated
+                        Timber.d("═══════════════════════════════════════")
+                        Timber.d("✅ UI STATE UPDATED")
+                        Timber.d("═══════════════════════════════════════")
+                        val clientAfter = _uiState.value.clients.find { it.id == clientId }
+                        Timber.d("📊 CLIENT STATE AFTER UI UPDATE:")
+                        Timber.d("   - Name: ${clientAfter?.name}")
+                        Timber.d("   - Last Visit Date (FINAL): ${clientAfter?.lastVisitDate}")
+                        Timber.d("   - Last Visit Notes (FINAL): ${clientAfter?.lastVisitNotes}")
+                        Timber.d("   - Visit Status (FINAL): ${clientAfter?.getVisitStatusColor()}")
+                        Timber.d("   - Selected Client: ${_uiState.value.selectedClient?.name}")
+                        Timber.d("   - Total Clients: ${_uiState.value.clients.size}")
+                        Timber.d("═══════════════════════════════════════")
+                    }
+                    is AppResult.Error -> {
+                        Timber.e("═══════════════════════════════════════")
+                        Timber.e("❌ API RETURNED ERROR")
+                        Timber.e("═══════════════════════════════════════")
+                        Timber.e("❌ Error Type: ${result.error::class.simpleName}")
+                        Timber.e("❌ Error Message: ${result.error.message}")
+                        Timber.e("❌ Error Code: ${result.error.message}")
+                        Timber.e("═══════════════════════════════════════")
+
+                        _uiState.value = _uiState.value.copy(
+                            error = result.error.message ?: "Failed to record visit"
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Failed to update quick visit status")
+                Timber.e("═══════════════════════════════════════")
+                Timber.e("💥 EXCEPTION CAUGHT")
+                Timber.e("═══════════════════════════════════════")
+                Timber.e(e, "Exception type: ${e::class.simpleName}")
+                Timber.e("Exception message: ${e.message}")
+                e.printStackTrace()
+                Timber.e("═══════════════════════════════════════")
+
                 _uiState.value = _uiState.value.copy(
-                    error = "Failed to update visit status: ${e.message}"
+                    error = "Unexpected error: ${e.message}"
                 )
             }
         }
     }
+
 
     /**
      * Public refresh entry point (used by the Refresh top-bar button).

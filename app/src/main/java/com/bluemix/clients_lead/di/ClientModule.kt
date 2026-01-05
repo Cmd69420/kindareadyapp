@@ -8,6 +8,8 @@ import com.bluemix.clients_lead.features.Clients.vm.ClientsViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 import com.bluemix.clients_lead.data.repository.OCRRepository
+import com.bluemix.clients_lead.domain.repository.IQuickVisitRepository
+import com.bluemix.clients_lead.data.repository.QuickVisitRepositoryImpl
 
 val clientModule = module {
 
@@ -16,6 +18,9 @@ val clientModule = module {
         ClientRepositoryImpl(
             httpClient = get()
         )
+    }
+    single<IQuickVisitRepository> {
+        QuickVisitRepositoryImpl(httpClient = get())
     }
 
     // Use Cases
@@ -35,6 +40,8 @@ val clientModule = module {
         SearchClients(repository = get())
     }
 
+    factory { CreateQuickVisit(repository = get()) }
+
     // ✅ NEW: Remote search use case
     factory {
         SearchRemoteClients(repository = get())
@@ -53,7 +60,7 @@ val clientModule = module {
             locationTrackingStateManager = get(),
             context = get(),
             createClient = get(),
-            sessionManager = get()// ✅ NEW: Inject application context
+            sessionManager = get()// ✅ NEW: Inject application context,
         )
     }
 

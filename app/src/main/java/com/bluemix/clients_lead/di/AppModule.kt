@@ -61,6 +61,7 @@ val appModule = module {
             get(), // GetClientsWithLocation
             get(), // GetCurrentUserId
             get(),
+            createQuickVisit = get()
         )
     }
 }

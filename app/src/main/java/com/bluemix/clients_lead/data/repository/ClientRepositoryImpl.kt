@@ -185,8 +185,8 @@ class ClientRepositoryImpl(
 data class ClientsResponse(
     val clients: List<BackendClient>,
     val pagination: PaginationData? = null,
-    val userPincode: String? = null, // ✅ Backend returns current user pincode
-    val filteredByPincode: Boolean? = null // ✅ Indicates if pincode filter was applied
+    val userPincode: String? = null,
+    val filteredByPincode: Boolean? = null
 )
 
 @Serializable
@@ -203,12 +203,15 @@ data class BackendClient(
     val address: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val pincode: String? = null, // ✅ Added pincode field
+    val pincode: String? = null,
     val status: String? = null,
     val notes: String? = null,
     val createdBy: String? = null,
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    // ✅ ADD THESE FIELDS
+    val lastVisitDate: String? = null,
+    val lastVisitNotes: String? = null
 )
 
 @Serializable
@@ -221,6 +224,7 @@ data class PaginationData(
 
 // ==================== Mapping Functions ====================
 
+// ✅ FIXED: Now includes lastVisitDate and lastVisitNotes
 fun BackendClient.toClientDto(): ClientDto {
     return ClientDto(
         id = this.id,
@@ -230,11 +234,14 @@ fun BackendClient.toClientDto(): ClientDto {
         address = this.address,
         latitude = this.latitude,
         longitude = this.longitude,
+        pincode = this.pincode,
         status = this.status ?: "active",
         notes = this.notes,
         createdBy = this.createdBy ?: "",
         createdAt = this.createdAt ?: "",
+        updatedAt = this.updatedAt ?: "",
         hasLocation = (this.latitude != null && this.longitude != null),
-        updatedAt = this.updatedAt ?: ""
+        lastVisitDate = this.lastVisitDate,  // ✅ ADDED
+        lastVisitNotes = this.lastVisitNotes  // ✅ ADDED
     )
 }
