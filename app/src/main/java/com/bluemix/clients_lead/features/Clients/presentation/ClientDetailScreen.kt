@@ -74,7 +74,7 @@ import ui.components.Scaffold
 import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
-import com.bluemix.clients_lead.features.Clients.presentation.components.LastVisitCardgit
+import com.bluemix.clients_lead.features.Clients.presentation.components.LastVisitCard
 
 /**
  * Client detail screen following proper ViewModel patterns.

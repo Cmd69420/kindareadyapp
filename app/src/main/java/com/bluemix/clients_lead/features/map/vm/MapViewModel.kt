@@ -261,6 +261,40 @@ class MapViewModel(
         _uiState.value = _uiState.value.copy(selectedClient = client)
     }
 
+
+    fun updateQuickVisitStatus(clientId: String, visitType: String) {
+        viewModelScope.launch {
+            try {
+                val currentLocation = _uiState.value.currentLocation
+
+                // Call your API service
+                val response = apiService.createQuickVisit(
+                    clientId = clientId,
+                    visitType = visitType,
+                    latitude = currentLocation?.latitude,
+                    longitude = currentLocation?.longitude,
+                    accuracy = null,
+                    notes = null
+                )
+
+                if (response.isSuccessful) {
+                    Timber.d("Quick visit recorded: $visitType for client $clientId")
+                    // Refresh clients to update last visit info
+                    loadClients()
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        error = "Failed to record visit"
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to update quick visit status")
+                _uiState.value = _uiState.value.copy(
+                    error = "Failed to update visit status: ${e.message}"
+                )
+            }
+        }
+    }
+
     /**
      * Public refresh entry point (used by the Refresh top-bar button).
      * Still goes through the tracking enforcement in [loadClients].

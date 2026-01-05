@@ -8,7 +8,7 @@ package com.bluemix.clients_lead.core.network
 //https://client-backend-wm7s.onrender.com
 object ApiEndpoints {
 
-    const val BASE_URL = "https://geo-track-1.onrender.com"
+    const val BASE_URL = "https://backup-server-q2dc.onrender.com"
 
     /**
      * Authentication endpoints

@@ -17,6 +17,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.ui.zIndex
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.model.VisitStatus
@@ -129,6 +131,19 @@ fun MapScreen(
     var showMultiLegExpense by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
     var hasAutoFocusedOnUser by remember { mutableStateOf(false) }
+    // 🔹 Map legend filter state
+    var isLegendExpanded by remember { mutableStateOf(false) }
+    var filteredStatuses by remember {
+        mutableStateOf(
+            setOf(
+                VisitStatus.NEVER_VISITED,
+                VisitStatus.RECENT,
+                VisitStatus.MODERATE,
+                VisitStatus.OVERDUE
+            )
+        )
+    }
+
     val context = LocalContext.current
     val activity = context as? Activity
 
@@ -329,42 +344,46 @@ fun MapScreen(
                     if (uiState.isTrackingEnabled) {
                         uiState.clients.forEach { client ->
                             if (client.latitude != null && client.longitude != null) {
-                                val position = LatLng(client.latitude, client.longitude)
+                                val visitStatus = client.getVisitStatusColor()
 
-                                // Determine marker color based on visit status
-                                val markerColor = when (client.getVisitStatusColor()) {
-                                    VisitStatus.NEVER_VISITED -> BitmapDescriptorFactory.HUE_RED      // Red - Never visited
-                                    VisitStatus.RECENT -> BitmapDescriptorFactory.HUE_GREEN           // Green - Recent visit (<7 days)
-                                    VisitStatus.MODERATE -> BitmapDescriptorFactory.HUE_YELLOW        // Yellow - Moderate (7-30 days)
-                                    VisitStatus.OVERDUE -> BitmapDescriptorFactory.HUE_ORANGE         // Orange - Overdue (30+ days)
-                                }
+                                // 🔹 FILTER CHECK
+                                if (filteredStatuses.contains(visitStatus)) {
+                                    val position = LatLng(client.latitude, client.longitude)
 
-                                // Create snippet with visit info
-                                val visitInfo = client.getFormattedLastVisit()?.let { "Last visit: $it" }
-                                    ?: "Never visited"
-
-                                val snippet = buildString {
-                                    append(visitInfo)
-                                    client.address?.let {
-                                        append(" • ")
-                                        append(it)
+                                    val markerColor = when (visitStatus) {
+                                        VisitStatus.NEVER_VISITED -> BitmapDescriptorFactory.HUE_RED
+                                        VisitStatus.RECENT -> BitmapDescriptorFactory.HUE_GREEN
+                                        VisitStatus.MODERATE -> BitmapDescriptorFactory.HUE_YELLOW
+                                        VisitStatus.OVERDUE -> BitmapDescriptorFactory.HUE_ORANGE
                                     }
-                                }
 
-                                Marker(
-                                    state = MarkerState(position = position),
-                                    title = client.name,
-                                    snippet = snippet,
-                                    icon = BitmapDescriptorFactory.defaultMarker(markerColor),
-                                    onClick = {
-                                        viewModel.selectClient(client)
-                                        true
+                                    val visitInfo =
+                                        client.getFormattedLastVisit()?.let { "Last visit: $it" }
+                                            ?: "Never visited"
+
+                                    val snippet = buildString {
+                                        append(visitInfo)
+                                        client.address?.let {
+                                            append(" • ")
+                                            append(it)
+                                        }
                                     }
-                                )
+
+                                    Marker(
+                                        state = MarkerState(position = position),
+                                        title = client.name,
+                                        snippet = snippet,
+                                        icon = BitmapDescriptorFactory.defaultMarker(markerColor),
+                                        onClick = {
+                                            viewModel.selectClient(client)
+                                            true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
-                }
+                    }
 
                 // Meeting Bottom Sheet - Highest priority (z-index 2)
                 AnimatedVisibility(
@@ -547,19 +566,33 @@ fun MapScreen(
                     }
                 }
 
-                var isLegendExpanded by remember { mutableStateOf(false) }
+                // Enhanced Map Legend - Top Right Position
 
                 AnimatedVisibility(
                     visible = uiState.isTrackingEnabled,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 120.dp, end = 16.dp),
+                        .padding(top = 120.dp, end = 16.dp),  // Changed positioning
                     enter = fadeIn() + slideInHorizontally { it },
                     exit = fadeOut() + slideOutHorizontally { it }
                 ) {
-                    MapLegend(
+                    EnhancedMapLegend(
                         isExpanded = isLegendExpanded,
-                        onToggle = { isLegendExpanded = !isLegendExpanded }
+                        onToggle = { isLegendExpanded = !isLegendExpanded },
+                        clientCounts = mapOf(
+                            VisitStatus.NEVER_VISITED to uiState.clients.count { it.getVisitStatusColor() == VisitStatus.NEVER_VISITED },
+                            VisitStatus.RECENT to uiState.clients.count { it.getVisitStatusColor() == VisitStatus.RECENT },
+                            VisitStatus.MODERATE to uiState.clients.count { it.getVisitStatusColor() == VisitStatus.MODERATE },
+                            VisitStatus.OVERDUE to uiState.clients.count { it.getVisitStatusColor() == VisitStatus.OVERDUE }
+                        ),
+                        filteredStatuses = filteredStatuses,
+                        onFilterChange = { status ->
+                            filteredStatuses = if (filteredStatuses.contains(status)) {
+                                filteredStatuses - status
+                            } else {
+                                filteredStatuses + status
+                            }
+                        }
                     )
                 }
 
@@ -842,123 +875,319 @@ private fun TrackingBenefitItem(text: String) {
 }
 
 
-@Composable
-private fun AnimatedClientBottomSheet(
-    client: Client,
-    cameraPositionState: CameraPositionState,
-    onClose: () -> Unit,
-    onViewDetails: () -> Unit,
-    onStartMeeting: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .background(AppTheme.colors.surface)
-            .padding(16.dp)
+    @Composable
+    private fun AnimatedClientBottomSheet(
+        client: Client,
+        cameraPositionState: CameraPositionState,
+        onClose: () -> Unit,
+        onViewDetails: () -> Unit,
+        onStartMeeting: () -> Unit,
+        onQuickVisit: (String) -> Unit = {} // New parameter for quick visit status update
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        var showVisitStatusMenu by remember { mutableStateOf(false) }
+        val visitStatus = client.getVisitStatusColor()
+        val lastVisit = client.getFormattedLastVisit()
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(AppTheme.colors.surface)
+                .padding(20.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = client.name,
-                    style = AppTheme.typography.h3,
-                    color = AppTheme.colors.text
-                )
-                IconButton(onClick = onClose) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = AppTheme.colors.textSecondary
-                    )
-                }
-            }
-
-            client.address?.let {
-                Text(
-                    text = it,
-                    style = AppTheme.typography.body2,
-                    color = AppTheme.colors.textSecondary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Button(
-                    onClick = onStartMeeting,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Handshake,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Start Meeting",
-                        style = AppTheme.typography.button
-                    )
-                }
-
+                // Header with close button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedButton(
-                        onClick = onViewDetails,
-                        modifier = Modifier.weight(1f)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = client.name,
+                            style = AppTheme.typography.h3,
+                            color = AppTheme.colors.text,
+                            fontWeight = FontWeight.Bold
+                        )
+                        // Visit status badge
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            VisitStatusIndicator(visitStatus)
+                            lastVisit?.let {
+                                Text(
+                                    text = it,
+                                    style = AppTheme.typography.body2,
+                                    color = AppTheme.colors.textSecondary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = AppTheme.colors.textSecondary
+                        )
+                    }
+                }
+
+                // Address
+                client.address?.let { address ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Info,
+                            imageVector = Icons.Default.LocationOn,
                             contentDescription = null,
+                            tint = AppTheme.colors.textSecondary,
                             modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Details",
+                            text = address,
+                            style = AppTheme.typography.body2,
+                            color = AppTheme.colors.textSecondary,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                // Divider
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(AppTheme.colors.onSurface.copy(alpha = 0.1f))
+                )
+
+                // Action Buttons
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Primary: Start Meeting
+                    Button(
+                        onClick = onStartMeeting,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Handshake,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Start Meeting",
                             style = AppTheme.typography.button
                         )
                     }
 
+                    // Secondary: Quick Visit Status
                     OutlinedButton(
-                        onClick = {
-                            if (client.latitude != null && client.longitude != null) {
-                                cameraPositionState.move(
-                                    CameraUpdateFactory.newLatLngZoom(
-                                        LatLng(client.latitude, client.longitude),
-                                        16f
-                                    )
-                                )
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
+                        onClick = { showVisitStatusMenu = !showVisitStatusMenu },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = AppTheme.colors.primary
+                        )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Directions,
+                            imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Focus",
+                            text = "Mark as Visited",
                             style = AppTheme.typography.button
                         )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Icon(
+                            imageVector = if (showVisitStatusMenu) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Quick visit status options
+                    AnimatedVisibility(
+                        visible = showVisitStatusMenu,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(AppTheme.colors.background)
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            QuickVisitOption(
+                                icon = "✅",
+                                label = "Client met successfully",
+                                onClick = {
+                                    onQuickVisit("met_success")
+                                    showVisitStatusMenu = false
+                                }
+                            )
+                            QuickVisitOption(
+                                icon = "🚫",
+                                label = "Client not available",
+                                onClick = {
+                                    onQuickVisit("not_available")
+                                    showVisitStatusMenu = false
+                                }
+                            )
+                            QuickVisitOption(
+                                icon = "🏢",
+                                label = "Office closed",
+                                onClick = {
+                                    onQuickVisit("office_closed")
+                                    showVisitStatusMenu = false
+                                }
+                            )
+                            QuickVisitOption(
+                                icon = "📞",
+                                label = "Spoke on phone",
+                                onClick = {
+                                    onQuickVisit("phone_call")
+                                    showVisitStatusMenu = false
+                                }
+                            )
+                        }
+                    }
+
+                    // Tertiary actions row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onViewDetails,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Details",
+                                style = AppTheme.typography.button,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (client.latitude != null && client.longitude != null) {
+                                    cameraPositionState.move(
+                                        CameraUpdateFactory.newLatLngZoom(
+                                            LatLng(client.latitude, client.longitude),
+                                            17f
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MyLocation,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Focus",
+                                style = AppTheme.typography.button,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             }
         }
     }
-}
 
+    @Composable
+    private fun VisitStatusIndicator(status: VisitStatus) {
+        val (backgroundColor, textColor, label) = when (status) {
+            VisitStatus.NEVER_VISITED -> Triple(
+                Color(0xFFEA4335).copy(alpha = 0.15f),
+                Color(0xFFEA4335),
+                "Never Visited"
+            )
+            VisitStatus.RECENT -> Triple(
+                Color(0xFF34A853).copy(alpha = 0.15f),
+                Color(0xFF34A853),
+                "Recent"
+            )
+            VisitStatus.MODERATE -> Triple(
+                Color(0xFFFBBC04).copy(alpha = 0.15f),
+                Color(0xFFFBBC04),
+                "Follow-up"
+            )
+            VisitStatus.OVERDUE -> Triple(
+                Color(0xFFFF6D00).copy(alpha = 0.15f),
+                Color(0xFFFF6D00),
+                "Overdue"
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(backgroundColor)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = label,
+                style = AppTheme.typography.label2,
+                color = textColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+
+    @Composable
+    private fun QuickVisitOption(
+        icon: String,
+        label: String,
+        onClick: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = icon,
+                fontSize = 18.sp
+            )
+            Text(
+                text = label,
+                style = AppTheme.typography.body2,
+                color = AppTheme.colors.text
+            )
+        }
+    }
 @Composable
 private fun AnimatedPermissionPrompt(
     onGrant: () -> Unit
@@ -1087,5 +1316,164 @@ private fun LegendItem(color: Color, label: String) {
             color = AppTheme.colors.textSecondary,
             fontSize = 12.sp
         )
+    }
+}
+
+
+@Composable
+private fun EnhancedMapLegend(
+    modifier: Modifier = Modifier,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    clientCounts: Map<VisitStatus, Int>,
+    filteredStatuses: Set<VisitStatus>,
+    onFilterChange: (VisitStatus) -> Unit
+) {
+    Column(
+        modifier = modifier
+            .width(200.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(AppTheme.colors.surface.copy(alpha = 0.98f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = AppTheme.colors.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Legend",
+                    style = AppTheme.typography.label1,
+                    color = AppTheme.colors.text,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = AppTheme.colors.textSecondary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // Total count badge
+        if (!isExpanded) {
+            Text(
+                text = "${clientCounts.values.sum()} clients",
+                style = AppTheme.typography.body2,
+                color = AppTheme.colors.textSecondary,
+                fontSize = 11.sp
+            )
+        }
+
+        // Expanded content
+        AnimatedVisibility(visible = isExpanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(modifier = Modifier.height(2.dp))
+
+                EnhancedLegendItem(
+                    color = Color(0xFFEA4335),
+                    label = "Never visited",
+                    count = clientCounts[VisitStatus.NEVER_VISITED] ?: 0,
+                    isEnabled = filteredStatuses.contains(VisitStatus.NEVER_VISITED),
+                    onClick = { onFilterChange(VisitStatus.NEVER_VISITED) }
+                )
+
+                EnhancedLegendItem(
+                    color = Color(0xFF34A853),
+                    label = "Recent visit",
+                    count = clientCounts[VisitStatus.RECENT] ?: 0,
+                    isEnabled = filteredStatuses.contains(VisitStatus.RECENT),
+                    onClick = { onFilterChange(VisitStatus.RECENT) }
+                )
+
+                EnhancedLegendItem(
+                    color = Color(0xFFFBBC04),
+                    label = "Follow-up soon",
+                    count = clientCounts[VisitStatus.MODERATE] ?: 0,
+                    isEnabled = filteredStatuses.contains(VisitStatus.MODERATE),
+                    onClick = { onFilterChange(VisitStatus.MODERATE) }
+                )
+
+                EnhancedLegendItem(
+                    color = Color(0xFFFF6D00),
+                    label = "Overdue",
+                    count = clientCounts[VisitStatus.OVERDUE] ?: 0,
+                    isEnabled = filteredStatuses.contains(VisitStatus.OVERDUE),
+                    onClick = { onFilterChange(VisitStatus.OVERDUE) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnhancedLegendItem(
+    color: Color,
+    label: String,
+    count: Int,
+    isEnabled: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .background(
+                if (isEnabled) Color.Transparent
+                else AppTheme.colors.background.copy(alpha = 0.5f)
+            )
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(if (isEnabled) color else color.copy(alpha = 0.3f))
+            )
+            Text(
+                text = label,
+                style = AppTheme.typography.body2,
+                color = if (isEnabled) AppTheme.colors.text else AppTheme.colors.textSecondary.copy(alpha = 0.5f),
+                fontSize = 12.sp
+            )
+        }
+
+        // Count badge
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(color.copy(alpha = if (isEnabled) 0.15f else 0.05f))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = count.toString(),
+                style = AppTheme.typography.label2,
+                color = if (isEnabled) color else color.copy(alpha = 0.5f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
