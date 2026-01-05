@@ -24,9 +24,11 @@ data class ClientDto(
     val updatedAt: String,
     val pincode: String? = null,
 
-    // New fields for last visit tracking
+    // ✅ FIXED: Added all three last visit fields
     @SerialName("last_visit_date")
     val lastVisitDate: String? = null,
+    @SerialName("last_visit_type")
+    val lastVisitType: String? = null,  // ← THIS WAS MISSING!
     @SerialName("last_visit_notes")
     val lastVisitNotes: String? = null
 )

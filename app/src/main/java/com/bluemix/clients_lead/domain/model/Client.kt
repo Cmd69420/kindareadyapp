@@ -21,6 +21,7 @@ data class Client(
     val createdAt: String,
     val updatedAt: String,
     val lastVisitDate: String? = null,  // ISO 8601 format
+    val lastVisitType: String? = null,  // ← ADDED: met_success, not_available, office_closed, phone_call
     val lastVisitNotes: String? = null
 ) {
     /**
@@ -101,6 +102,19 @@ data class Client(
             }
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * ✅ NEW: Get human-readable visit type
+     */
+    fun getFormattedVisitType(): String? {
+        return when (lastVisitType) {
+            "met_success" -> "Met successfully"
+            "not_available" -> "Not available"
+            "office_closed" -> "Office closed"
+            "phone_call" -> "Phone call"
+            else -> lastVisitType?.replace("_", " ")?.capitalize()
         }
     }
 

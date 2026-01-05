@@ -138,7 +138,7 @@ private data class BackendClientData(
     val createdAt: String,
     val updatedAt: String,
     val lastVisitDate: String? = null,
-    val lastVisitType: String? = null,
+    val lastVisitType: String? = null,  // ← ADD THIS
     val lastVisitNotes: String? = null
 )
 
@@ -158,5 +158,6 @@ private fun BackendClientData.toClient() = Client(
     createdAt = createdAt,
     updatedAt = updatedAt,
     lastVisitDate = lastVisitDate,
+    lastVisitType = lastVisitType,  // ← ADD THIS
     lastVisitNotes = lastVisitNotes
 )
