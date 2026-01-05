@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import com.google.maps.android.compose.rememberMarkerState
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
@@ -229,24 +230,6 @@ fun MapScreen(
     }
 
 
-    LaunchedEffect(uiState.clients) {
-        if (hasAutoFocusedOnUser &&
-            uiState.clients.isNotEmpty() &&
-            !uiState.isLoading
-        ) {
-            val firstClientWithLocation = uiState.clients.firstOrNull {
-                it.latitude != null && it.longitude != null
-            }
-            firstClientWithLocation?.let { client ->
-                cameraPositionState.animate(
-                    CameraUpdateFactory.newLatLngZoom(
-                        LatLng(client.latitude!!, client.longitude!!),
-                        16f
-                    )
-                )
-            }
-        }
-    }
 
     LaunchedEffect(uiState.currentLocation, uiState.clients) {
         if (uiState.currentLocation != null && uiState.clients.isNotEmpty()) {
@@ -329,6 +312,7 @@ fun MapScreen(
                     .padding(paddingValues)
             ) {
                 // In MapScreen.kt, replace the GoogleMap marker rendering section:
+// In MapScreen.kt, replace the GoogleMap marker rendering section:
 
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -352,31 +336,17 @@ fun MapScreen(
                                 val visitStatus = client.getVisitStatusColor()
 
                                 Timber.d("📍 Marker #$index: ${client.name}")
-                                Timber.d("   - ID: ${client.id}")
-                                Timber.d("   - Last Visit Date: ${client.lastVisitDate}")
                                 Timber.d("   - Visit Status: $visitStatus")
-                                Timber.d("   - Filtered: ${filteredStatuses.contains(visitStatus)}")
+                                Timber.d("   - Last Visit: ${client.lastVisitDate}")
 
                                 if (filteredStatuses.contains(visitStatus)) {
                                     val position = LatLng(client.latitude, client.longitude)
 
                                     val markerColor = when (visitStatus) {
-                                        VisitStatus.NEVER_VISITED -> {
-                                            Timber.d("   - Color: RED")
-                                            BitmapDescriptorFactory.HUE_RED
-                                        }
-                                        VisitStatus.RECENT -> {
-                                            Timber.d("   - Color: GREEN")
-                                            BitmapDescriptorFactory.HUE_GREEN
-                                        }
-                                        VisitStatus.MODERATE -> {
-                                            Timber.d("   - Color: YELLOW")
-                                            BitmapDescriptorFactory.HUE_YELLOW
-                                        }
-                                        VisitStatus.OVERDUE -> {
-                                            Timber.d("   - Color: ORANGE")
-                                            BitmapDescriptorFactory.HUE_ORANGE
-                                        }
+                                        VisitStatus.NEVER_VISITED -> BitmapDescriptorFactory.HUE_RED
+                                        VisitStatus.RECENT -> BitmapDescriptorFactory.HUE_GREEN
+                                        VisitStatus.MODERATE -> BitmapDescriptorFactory.HUE_YELLOW
+                                        VisitStatus.OVERDUE -> BitmapDescriptorFactory.HUE_ORANGE
                                     }
 
                                     val visitInfo = client.getFormattedLastVisit()?.let { "Last visit: $it" }
@@ -390,9 +360,9 @@ fun MapScreen(
                                         }
                                     }
 
-                                    // ✅ Use key to force recomposition when lastVisitDate changes
-                                    androidx.compose.runtime.key(client.id, client.lastVisitDate) {
-                                        Timber.d("   - Rendering with key: ${client.id}, ${client.lastVisitDate}")
+                                    // ✅ CRITICAL FIX: Use a unique key that changes when visit data changes
+                                    androidx.compose.runtime.key("${client.id}-${client.lastVisitDate}-${visitStatus}") {
+                                        Timber.d("   - Rendering with composite key: ${client.id}-${client.lastVisitDate}-${visitStatus}")
 
                                         Marker(
                                             state = MarkerState(position = position),
@@ -413,6 +383,7 @@ fun MapScreen(
                         Timber.d("🗺️ MARKER RENDERING COMPLETE")
                     }
                 }
+
 
                 // Meeting Bottom Sheet - Highest priority (z-index 2)
                 AnimatedVisibility(

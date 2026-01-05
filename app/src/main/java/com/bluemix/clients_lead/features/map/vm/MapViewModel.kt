@@ -174,63 +174,7 @@ class MapViewModel(
      * Load clients only if tracking is currently enabled.
      * This method is the central enforcement point for the security requirement.
      */
-    fun loadClients() {
-        viewModelScope.launch {
-            val isTracking = locationTrackingStateManager.isCurrentlyTracking()
-            if (!isTracking) {
-                Timber.w("Denied client loading: tracking is not enabled.")
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    clients = emptyList(),
-                    userClockedIn = false,
-                    error = "Location tracking must be enabled to view clients."
-                )
-                return@launch
-            }
 
-            Timber.d("Loading clients with location...")
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-
-            val userId = getCurrentUserId()
-            if (userId == null) {
-                Timber.e("User not authenticated")
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "User not authenticated"
-                )
-                return@launch
-            }
-
-            Timber.d("Loading clients with location for user: $userId")
-
-            when (val result = getClientsWithLocation(userId)) {
-                is AppResult.Success -> {
-                    val clients = result.data
-                    val clockedIn = clients.isNotEmpty()
-
-                    Timber.d(
-                        "Loaded ${clients.size} clients. Clocked-In = $clockedIn " +
-                                "| TrackingEnabled = $isTracking"
-                    )
-
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        clients = clients,
-                        userClockedIn = clockedIn,
-                        error = null
-                    )
-                }
-
-                is AppResult.Error -> {
-                    Timber.e(result.error.message, "Failed to load clients")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = result.error.message ?: "Failed to load clients"
-                    )
-                }
-            }
-        }
-    }
 
     fun updateCurrentLocation(location: LatLng) {
         _uiState.value = _uiState.value.copy(currentLocation = location)
@@ -264,7 +208,8 @@ class MapViewModel(
     }
 
 
-    // features/map/vm/MapViewModel.kt
+    // MapViewModel.kt - Updated updateQuickVisitStatus
+
     fun updateQuickVisitStatus(clientId: String, visitType: String, notes: String? = null) {
         viewModelScope.launch {
             try {
@@ -283,15 +228,6 @@ class MapViewModel(
                 Timber.d("═══════════════════════════════════════")
                 Timber.d("📍 Client ID: $clientId")
                 Timber.d("📍 Visit Type: $visitType")
-                Timber.d("📍 Location: ${currentLocation.latitude}, ${currentLocation.longitude}")
-
-                // Log BEFORE state
-                val clientBefore = _uiState.value.clients.find { it.id == clientId }
-                Timber.d("📊 CLIENT STATE BEFORE:")
-                Timber.d("   - Name: ${clientBefore?.name}")
-                Timber.d("   - Last Visit Date (BEFORE): ${clientBefore?.lastVisitDate}")
-                Timber.d("   - Last Visit Notes (BEFORE): ${clientBefore?.lastVisitNotes}")
-                Timber.d("   - Visit Status (BEFORE): ${clientBefore?.getVisitStatusColor()}")
 
                 when (val result = createQuickVisit(
                     clientId = clientId,
@@ -304,89 +240,115 @@ class MapViewModel(
                     is AppResult.Success -> {
                         val updatedClient = result.data
 
-                        Timber.d("═══════════════════════════════════════")
                         Timber.d("✅ API RETURNED SUCCESS")
-                        Timber.d("═══════════════════════════════════════")
-                        Timber.d("📦 UPDATED CLIENT DATA FROM API:")
-                        Timber.d("   - Client ID: ${updatedClient.id}")
-                        Timber.d("   - Name: ${updatedClient.name}")
-                        Timber.d("   - Last Visit Date (NEW): ${updatedClient.lastVisitDate}")
-                        Timber.d("   - Last Visit Notes (NEW): ${updatedClient.lastVisitNotes}")
-                        Timber.d("   - Visit Status (NEW): ${updatedClient.getVisitStatusColor()}")
-                        Timber.d("   - Has Location: ${updatedClient.hasLocation}")
+                        Timber.d("📦 Updated Client: ${updatedClient.name}")
+                        Timber.d("   - Last Visit Date: ${updatedClient.lastVisitDate}")
+                        Timber.d("   - Visit Status: ${updatedClient.getVisitStatusColor()}")
 
-                        // Update the client list
-                        val currentClients = _uiState.value.clients
-                        Timber.d("📊 CURRENT CLIENT LIST SIZE: ${currentClients.size}")
-
-                        val updatedClients = currentClients.map { client ->
+                        // ✅ FIX: Create completely new list to force recomposition
+                        val updatedClients = _uiState.value.clients.map { client ->
                             if (client.id == updatedClient.id) {
-                                Timber.d("🔄 REPLACING CLIENT: ${client.name}")
-                                Timber.d("   - OLD lastVisitDate: ${client.lastVisitDate}")
-                                Timber.d("   - NEW lastVisitDate: ${updatedClient.lastVisitDate}")
-                                updatedClient
+                                updatedClient.copy() // Use copy() to ensure new reference
                             } else {
                                 client
                             }
-                        }
+                        }.toMutableList() // Ensure new list reference
 
-                        Timber.d("📊 UPDATED CLIENT LIST SIZE: ${updatedClients.size}")
-
-                        // Verify the replacement worked
-                        val replacedClient = updatedClients.find { it.id == clientId }
-                        Timber.d("🔍 VERIFICATION - Client in new list:")
-                        Timber.d("   - Name: ${replacedClient?.name}")
-                        Timber.d("   - Last Visit Date: ${replacedClient?.lastVisitDate}")
-                        Timber.d("   - Visit Status: ${replacedClient?.getVisitStatusColor()}")
-
-                        // Update UI state
                         Timber.d("🔄 UPDATING UI STATE...")
+
+                        // ✅ Update state WITHOUT reloading from backend
                         _uiState.value = _uiState.value.copy(
                             clients = updatedClients,
                             selectedClient = null,
                             error = null
                         )
 
-                        // Verify state was updated
+                        // ✅ CRITICAL: Verify the update worked
+                        val verifyClient = _uiState.value.clients.find { it.id == clientId }
                         Timber.d("═══════════════════════════════════════")
                         Timber.d("✅ UI STATE UPDATED")
                         Timber.d("═══════════════════════════════════════")
-                        val clientAfter = _uiState.value.clients.find { it.id == clientId }
-                        Timber.d("📊 CLIENT STATE AFTER UI UPDATE:")
-                        Timber.d("   - Name: ${clientAfter?.name}")
-                        Timber.d("   - Last Visit Date (FINAL): ${clientAfter?.lastVisitDate}")
-                        Timber.d("   - Last Visit Notes (FINAL): ${clientAfter?.lastVisitNotes}")
-                        Timber.d("   - Visit Status (FINAL): ${clientAfter?.getVisitStatusColor()}")
-                        Timber.d("   - Selected Client: ${_uiState.value.selectedClient?.name}")
-                        Timber.d("   - Total Clients: ${_uiState.value.clients.size}")
+                        Timber.d("📊 VERIFICATION:")
+                        Timber.d("   - Name: ${verifyClient?.name}")
+                        Timber.d("   - Last Visit Date: ${verifyClient?.lastVisitDate}")
+                        Timber.d("   - Visit Status: ${verifyClient?.getVisitStatusColor()}")
+                        Timber.d("   - List Size: ${_uiState.value.clients.size}")
+                        Timber.d("   - List HashCode: ${_uiState.value.clients.hashCode()}")
                         Timber.d("═══════════════════════════════════════")
                     }
                     is AppResult.Error -> {
-                        Timber.e("═══════════════════════════════════════")
-                        Timber.e("❌ API RETURNED ERROR")
-                        Timber.e("═══════════════════════════════════════")
-                        Timber.e("❌ Error Type: ${result.error::class.simpleName}")
-                        Timber.e("❌ Error Message: ${result.error.message}")
-                        Timber.e("❌ Error Code: ${result.error.message}")
-                        Timber.e("═══════════════════════════════════════")
-
+                        Timber.e("❌ API ERROR: ${result.error.message}")
                         _uiState.value = _uiState.value.copy(
                             error = result.error.message ?: "Failed to record visit"
                         )
                     }
                 }
             } catch (e: Exception) {
-                Timber.e("═══════════════════════════════════════")
-                Timber.e("💥 EXCEPTION CAUGHT")
-                Timber.e("═══════════════════════════════════════")
-                Timber.e(e, "Exception type: ${e::class.simpleName}")
-                Timber.e("Exception message: ${e.message}")
-                e.printStackTrace()
-                Timber.e("═══════════════════════════════════════")
-
+                Timber.e(e, "💥 EXCEPTION in updateQuickVisitStatus")
                 _uiState.value = _uiState.value.copy(
                     error = "Unexpected error: ${e.message}"
                 )
+            }
+        }
+    }
+
+    // ✅ Also update loadClients to log what it's doing
+    fun loadClients() {
+        viewModelScope.launch {
+            val isTracking = locationTrackingStateManager.isCurrentlyTracking()
+            if (!isTracking) {
+                Timber.w("Denied client loading: tracking is not enabled.")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    clients = emptyList(),
+                    userClockedIn = false,
+                    error = "Location tracking must be enabled to view clients."
+                )
+                return@launch
+            }
+
+            Timber.d("🔄 LOADING CLIENTS FROM BACKEND...")
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                Timber.e("User not authenticated")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "User not authenticated"
+                )
+                return@launch
+            }
+
+            when (val result = getClientsWithLocation(userId)) {
+                is AppResult.Success -> {
+                    val clients = result.data
+                    val clockedIn = clients.isNotEmpty()
+
+                    Timber.d("✅ Loaded ${clients.size} clients from backend")
+
+                    // Log first client to verify data
+                    clients.firstOrNull()?.let { firstClient ->
+                        Timber.d("📋 Sample Client: ${firstClient.name}")
+                        Timber.d("   - Last Visit: ${firstClient.lastVisitDate}")
+                        Timber.d("   - Status: ${firstClient.getVisitStatusColor()}")
+                    }
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        clients = clients,
+                        userClockedIn = clockedIn,
+                        error = null
+                    )
+                }
+
+                is AppResult.Error -> {
+                    Timber.e(result.error.message, "Failed to load clients")
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = result.error.message ?: "Failed to load clients"
+                    )
+                }
             }
         }
     }
