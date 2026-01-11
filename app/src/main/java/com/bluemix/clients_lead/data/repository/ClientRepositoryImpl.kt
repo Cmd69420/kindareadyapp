@@ -118,6 +118,24 @@ class ClientRepositoryImpl(
         }
     }
 
+    override suspend fun updateClientAddress(
+        clientId: String,
+        newAddress: String
+    ): AppResult<Client> = withContext(Dispatchers.IO) {
+        runAppCatching(mapper = { it.toAppError() }) {
+            Log.d("CLIENT_REPO", "📍 Updating address for client: $clientId")
+
+            val request = UpdateAddressRequest(address = newAddress)
+
+            // ✅ Changed PUT to PATCH
+            val response = httpClient.patch(ApiEndpoints.Clients.updateAddress(clientId)) {
+                setBody(request)
+            }.body<SingleClientResponse>()
+
+            Log.d("CLIENT_REPO", "✅ Address updated successfully")
+            response.client.toClientDto().toDomain()
+        }
+    }
 
 
     override suspend fun createClient(
@@ -246,3 +264,8 @@ fun BackendClient.toClientDto(): ClientDto {
         lastVisitNotes = this.lastVisitNotes  // ✅ ADDED
     )
 }
+
+@Serializable
+data class UpdateAddressRequest(
+    val address: String
+)

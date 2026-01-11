@@ -46,7 +46,7 @@ val clientModule = module {
     factory {
         SearchRemoteClients(repository = get())
     }
-
+    factory { UpdateClientAddress(repository = get()) }
     factory { CreateClient(repository = get()) }
     factory { OCRRepository() }
 
@@ -60,7 +60,8 @@ val clientModule = module {
             locationTrackingStateManager = get(),
             context = get(),
             createClient = get(),
-            sessionManager = get()// ✅ NEW: Inject application context,
+            sessionManager = get()
+            // ✅ NEW: Inject application context,
         )
     }
 

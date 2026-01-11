@@ -108,6 +108,7 @@ import ui.components.Scaffold
 import ui.components.Text
 import ui.components.topbar.TopBar
 import ui.components.topbar.TopBarDefaults
+import androidx.compose.material.icons.filled.Edit
 
 
 
@@ -933,9 +934,23 @@ private fun TrackingBenefitItem(text: String) {
         onStartMeeting: () -> Unit,
         onQuickVisit: (String) -> Unit = {} // New parameter for quick visit status update
     ) {
+        val viewModel: MapViewModel = koinViewModel()
+        val uiState by viewModel.uiState.collectAsState()
+
         var showVisitStatusMenu by remember { mutableStateOf(false) }
+        var isEditingAddress by remember { mutableStateOf(false) }
+        var editedAddress by remember(client.address) { mutableStateOf(client.address ?: "") }
+
         val visitStatus = client.getVisitStatusColor()
         val lastVisit = client.getFormattedLastVisit()
+
+
+        LaunchedEffect(uiState.updateError) {
+            if (uiState.updateError != null) {
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearUpdateError()
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -988,26 +1003,145 @@ private fun TrackingBenefitItem(text: String) {
                     }
                 }
 
-                // Address
-                client.address?.let { address ->
+                // Address Section with Edit
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = AppTheme.colors.textSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = AppTheme.colors.textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Address",
+                                style = AppTheme.typography.label2,
+                                color = AppTheme.colors.textSecondary
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isEditingAddress = !isEditingAddress },
+                            enabled = !uiState.isUpdatingAddress
+                        ) {
+                            Icon(
+                                imageVector = if (isEditingAddress) Icons.Default.Close else Icons.Default.Edit,
+                                contentDescription = if (isEditingAddress) "Cancel" else "Edit",
+                                tint = AppTheme.colors.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = !isEditingAddress,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
                         Text(
-                            text = address,
+                            text = client.address ?: "No address",
                             style = AppTheme.typography.body2,
-                            color = AppTheme.colors.textSecondary,
-                            lineHeight = 18.sp
+                            color = AppTheme.colors.text
                         )
                     }
+
+                    AnimatedVisibility(
+                        visible = isEditingAddress,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ui.components.textfield.TextField(
+                                value = editedAddress,
+                                onValueChange = { editedAddress = it },
+                                placeholder = { Text("Enter new address") },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !uiState.isUpdatingAddress,
+                                minLines = 2,
+                                maxLines = 4
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        isEditingAddress = false
+                                        editedAddress = client.address ?: ""
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = !uiState.isUpdatingAddress
+                                ) {
+                                    Text("Cancel")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (editedAddress.isNotBlank() && editedAddress != client.address) {
+                                            viewModel.updateAddress(client.id, editedAddress)
+                                            isEditingAddress = false
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = !uiState.isUpdatingAddress &&
+                                            editedAddress.isNotBlank() &&
+                                            editedAddress != client.address
+                                ) {
+                                    if (uiState.isUpdatingAddress) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Update")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
+
+                // Error message
+                AnimatedVisibility(
+                    visible = uiState.updateError != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AppTheme.colors.error.copy(alpha = 0.1f))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = AppTheme.colors.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = uiState.updateError ?: "",
+                                style = AppTheme.typography.body3,
+                                color = AppTheme.colors.error
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // Divider
                 Box(

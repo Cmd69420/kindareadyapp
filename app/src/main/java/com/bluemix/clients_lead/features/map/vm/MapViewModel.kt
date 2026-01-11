@@ -2,7 +2,9 @@ package com.bluemix.clients_lead.features.map.vm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.update
 import com.bluemix.clients_lead.core.common.utils.AppResult
+import com.bluemix.clients_lead.domain.usecases.UpdateClientAddress
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.model.LocationLog
 import com.bluemix.clients_lead.domain.usecases.GetClientsWithLocation
@@ -24,7 +26,9 @@ data class MapUiState(
     val selectedClient: Client? = null,
     val userClockedIn: Boolean = false,
     val isTrackingEnabled: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val isUpdatingAddress: Boolean = false,
+    val updateError: String? = null
 )
 
 /**
@@ -40,7 +44,8 @@ class MapViewModel(
     private val getClientsWithLocation: GetClientsWithLocation,
     private val getCurrentUserId: GetCurrentUserId,
     private val locationTrackingStateManager: LocationTrackingStateManager,
-    private val createQuickVisit: CreateQuickVisit
+    private val createQuickVisit: CreateQuickVisit,
+    private val updateClientAddress: UpdateClientAddress
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
@@ -207,6 +212,46 @@ class MapViewModel(
         _uiState.value = _uiState.value.copy(selectedClient = client)
     }
 
+    fun updateAddress(clientId: String, newAddress: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isUpdatingAddress = true,
+                updateError = null
+            )
+
+            Timber.d("🔄 Updating address for client: $clientId")
+
+            when (val result = updateClientAddress(clientId, newAddress)) {
+                is AppResult.Success -> {
+                    val updatedClient = result.data
+                    Timber.d("✅ Address updated successfully")
+
+                    // Update client in list
+                    val updatedClients = _uiState.value.clients.map { client ->
+                        if (client.id == clientId) updatedClient else client
+                    }
+
+                    _uiState.value = _uiState.value.copy(
+                        clients = updatedClients,
+                        selectedClient = updatedClient,
+                        isUpdatingAddress = false
+                    )
+                }
+
+                is AppResult.Error -> {
+                    Timber.e("❌ Failed to update address: ${result.error.message}")
+                    _uiState.value = _uiState.value.copy(
+                        isUpdatingAddress = false,
+                        updateError = result.error.message ?: "Failed to update address"
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearUpdateError() {
+        _uiState.value = _uiState.value.copy(updateError = null)
+    }
 
     // MapViewModel.kt - Updated updateQuickVisitStatus
 

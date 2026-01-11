@@ -63,6 +63,11 @@ interface IClientRepository {
         notes: String?
     ): AppResult<Client>
 
+    suspend fun updateClientAddress(
+        clientId: String,
+        newAddress: String
+    ): AppResult<Client>
+
     /**
      * Upload Excel file with clients
      */

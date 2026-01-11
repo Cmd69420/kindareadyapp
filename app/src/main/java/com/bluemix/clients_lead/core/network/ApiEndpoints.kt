@@ -9,7 +9,7 @@ package com.bluemix.clients_lead.core.network
 //https://backup-server-q2dc.onrender.com
 object ApiEndpoints {
 
-    const val BASE_URL = "https://geo-track-1.onrender.com"
+    const val BASE_URL = "https://backup-server-q2dc.onrender.com"
 
     /**
      * Authentication endpoints
@@ -31,6 +31,7 @@ object ApiEndpoints {
 
         fun byId(clientId: String) = "$BASE/$clientId"
         fun manualById(clientId: String) = "/manual-clients/$clientId"
+        fun updateAddress(clientId: String) = "$BASE/$clientId/address"
     }
 
     object User {
