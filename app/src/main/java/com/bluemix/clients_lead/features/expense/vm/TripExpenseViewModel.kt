@@ -1,3 +1,4 @@
+// features/expense/vm/TripExpenseViewModel.kt
 package com.bluemix.clients_lead.features.expense.vm
 
 import android.content.Context
@@ -13,6 +14,7 @@ import com.bluemix.clients_lead.domain.model.TransportMode
 import com.bluemix.clients_lead.domain.model.TripExpense
 import com.bluemix.clients_lead.domain.usecases.SubmitTripExpenseUseCase
 import com.bluemix.clients_lead.domain.usecases.UploadReceiptUseCase
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +40,10 @@ data class TripExpenseUiState(
     val amountSpent: Double = 0.0,
     val notes: String = "",
     val receiptImages: List<String> = emptyList(),
+
+    // ✅ NEW: Route visualization
+    val routePolyline: List<LatLng>? = null,
+    val estimatedDuration: Int = 0, // minutes
 
     // Image processing
     val isProcessingImage: Boolean = false,
@@ -121,25 +127,56 @@ class TripExpenseViewModel(
         calculateDistance()
     }
 
+    /**
+     * ✅ UPDATED: Calculate distance with route geometry
+     */
     private fun calculateDistance() {
         val start = _uiState.value.startLocation
         val end = _uiState.value.endLocation
+        val mode = _uiState.value.transportMode
 
         if (start != null && end != null) {
-            val distance = locationSearchRepo.calculateDistanceKm(start, end)
-            _uiState.value = _uiState.value.copy(distanceKm = distance)
-            Timber.d("📏 Distance calculated: $distance km")
+            viewModelScope.launch {
+                try {
+                    _uiState.value = _uiState.value.copy(
+                        distanceKm = 0.0,
+                        routePolyline = null // Clear old route
+                    )
+
+                    Timber.d("📏 Calculating route: $mode")
+
+                    // ✅ Get route with geometry
+                    val routeResult = locationSearchRepo.calculateRouteWithGeometry(
+                        start, end, mode
+                    )
+
+                    _uiState.value = _uiState.value.copy(
+                        distanceKm = routeResult.distanceKm,
+                        routePolyline = routeResult.routePolyline,
+                        estimatedDuration = routeResult.durationMinutes
+                    )
+
+                    Timber.d("✅ Route: ${routeResult.distanceKm} km, ${routeResult.durationMinutes} min, ${routeResult.routePolyline?.size} points")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to calculate route")
+                    // Fallback to straight-line
+                    val fallbackDistance = locationSearchRepo.calculateDistanceKm(start, end)
+                    _uiState.value = _uiState.value.copy(
+                        distanceKm = fallbackDistance,
+                        routePolyline = listOf(
+                            LatLng(start.latitude, start.longitude),
+                            LatLng(end.latitude, end.longitude)
+                        )
+                    )
+                }
+            }
         }
     }
 
     // ============================================
-    // IMAGE HANDLING - NEW
+    // IMAGE HANDLING
     // ============================================
 
-    /**
-     * Process image from camera or gallery
-     * Compresses to WebP and uploads
-     */
     fun processAndUploadImage(context: Context, uri: Uri) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -149,7 +186,6 @@ class TripExpenseViewModel(
             )
 
             try {
-                // Compress to WebP Base64
                 val result = ImageCompressionUtils.compressToWebP(
                     context = context,
                     uri = uri,
@@ -162,10 +198,9 @@ class TripExpenseViewModel(
                     onSuccess = { base64String ->
                         Timber.i("✅ Image compressed successfully")
 
-                        // ✅ NO UPLOAD - Just add to local state
                         val currentReceipts = _uiState.value.receiptImages
                         _uiState.value = _uiState.value.copy(
-                            receiptImages = currentReceipts + base64String,  // Store base64 directly
+                            receiptImages = currentReceipts + base64String,
                             isProcessingImage = false,
                             imageProcessingProgress = null
                         )
@@ -190,13 +225,16 @@ class TripExpenseViewModel(
         }
     }
 
-
     // ============================================
     // EXPENSE DETAILS
     // ============================================
 
+    /**
+     * ✅ UPDATED: Recalculate distance when transport mode changes
+     */
     fun updateTransportMode(mode: TransportMode) {
         _uiState.value = _uiState.value.copy(transportMode = mode, error = null)
+        calculateDistance() // Recalculate with new mode
     }
 
     fun updateAmount(amount: Double) {
@@ -227,20 +265,18 @@ class TripExpenseViewModel(
     // SUBMIT EXPENSE
     // ============================================
 
-    // Add this to your submitExpense function in TripExpenseViewModel.kt
-
     fun submitExpense(onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             val state = _uiState.value
             val userId = sessionManager.getCurrentUserId()
 
-            // ✅ Enhanced logging
             Timber.d("📝 SUBMIT EXPENSE CALLED")
             Timber.d("  User ID: $userId")
             Timber.d("  Start: ${state.startLocation?.displayName}")
             Timber.d("  End: ${state.endLocation?.displayName}")
             Timber.d("  Distance: ${state.distanceKm}")
             Timber.d("  Amount: ${state.amountSpent}")
+            Timber.d("  Mode: ${state.transportMode}")
             Timber.d("  Receipts: ${state.receiptImages.size}")
 
             if (userId == null) {
@@ -279,7 +315,7 @@ class TripExpenseViewModel(
                 val expense = TripExpense(
                     id = UUID.randomUUID().toString(),
                     userId = userId,
-                    tripName = null,  // ✅ Single leg trips don't have tripName
+                    tripName = null,
                     startLocation = state.startLocation.displayName,
                     endLocation = state.endLocation.displayName,
                     travelDate = state.travelDate,
@@ -290,10 +326,9 @@ class TripExpenseViewModel(
                     receiptImages = state.receiptImages,
                     clientId = null,
                     clientName = null,
-                    legs = null  // ✅ Single leg trip
+                    legs = null
                 )
 
-                // ✅ Log the expense object
                 Timber.d("📤 Submitting expense: $expense")
 
                 when (val result = submitExpense(expense)) {
@@ -303,16 +338,12 @@ class TripExpenseViewModel(
                         _uiState.value = TripExpenseUiState(
                             successMessage = "Expense submitted successfully!"
                         )
-                        onSuccess()
-                    }
+                        onSuccess()}
                     is AppResult.Error -> {
-                        // ✅ Enhanced error logging
                         Timber.e("❌ Submit failed")
                         Timber.e("  Error type: ${result.error::class.simpleName}")
                         Timber.e("  Error message: ${result.error.message}")
                         Timber.e("  Error cause: ${result.error.cause?.message}")
-
-                        // ✅ Show specific error details to user
                         val errorMessage = when (result.error) {
                             is com.bluemix.clients_lead.core.common.utils.AppError.Validation -> {
                                 "Validation error: ${result.error.message}"
@@ -336,7 +367,6 @@ class TripExpenseViewModel(
                 Timber.e(e, "❌ Exception during submit")
                 Timber.e("  Exception type: ${e::class.simpleName}")
                 Timber.e("  Exception message: ${e.message}")
-                Timber.e("  Stack trace: ${e.stackTraceToString()}")
 
                 _uiState.value = state.copy(
                     isSubmitting = false,

@@ -5,8 +5,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -34,9 +36,11 @@ import com.bluemix.clients_lead.core.design.ui.components.textfield.OutlinedText
 import com.bluemix.clients_lead.domain.model.LocationPlace
 import com.bluemix.clients_lead.domain.model.TransportMode
 import com.bluemix.clients_lead.features.expense.vm.TripExpenseViewModel
+import com.bluemix.clients_lead.features.expense.presentation.components.MiniRouteMap // ✅ Import MiniRouteMap
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.android.gms.maps.model.LatLng // ✅ Import LatLng
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import timber.log.Timber
@@ -61,12 +65,10 @@ fun TripExpenseSheet(
     var showImagePickerDialog by remember { mutableStateOf(false) }
     var currentImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Camera permission
     val cameraPermission = rememberPermissionState(
         permission = Manifest.permission.CAMERA
     )
 
-    // Camera launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
@@ -76,7 +78,6 @@ fun TripExpenseSheet(
         }
     }
 
-    // Gallery launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -370,6 +371,34 @@ fun TripExpenseSheet(
                         }
                     }
 
+                    // ✅ NEW: MINI ROUTE MAP SECTION
+                    AnimatedVisibility(
+                        visible = uiState.routePolyline?.isNotEmpty() == true &&
+                                uiState.startLocation != null &&
+                                uiState.endLocation != null,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        SectionCard(title = "Route Preview") {
+                            uiState.routePolyline?.let { polyline ->
+                                MiniRouteMap(
+                                    routePolyline = polyline,
+                                    startLocation = LatLng(
+                                        uiState.startLocation!!.latitude,
+                                        uiState.startLocation!!.longitude
+                                    ),
+                                    endLocation = LatLng(
+                                        uiState.endLocation!!.latitude,
+                                        uiState.endLocation!!.longitude
+                                    ),
+                                    distanceKm = uiState.distanceKm,
+                                    durationMinutes = uiState.estimatedDuration,
+                                    transportMode = uiState.transportMode.name
+                                )
+                            }
+                        }
+                    }
+
                     // EXPENSE DETAILS SECTION
                     SectionCard(title = "Expense Details") {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -417,14 +446,14 @@ fun TripExpenseSheet(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            uiState.receiptImages.forEach { uri ->  // ✅ Changed from receiptUrls
+                            uiState.receiptImages.forEach { uri ->
                                 ReceiptImage(
                                     uri = uri,
                                     onRemove = { viewModel.removeReceipt(uri) }
                                 )
                             }
 
-                            if (uiState.receiptImages.size < 5) {  // ✅ Changed from receiptUrls
+                            if (uiState.receiptImages.size < 5) {
                                 AddReceiptButton(
                                     onClick = { showImagePickerDialog = true },
                                     isProcessing = uiState.isProcessingImage
@@ -643,16 +672,15 @@ private fun TransportModeCard(
     }
 }
 
-// OPTION 1: Change the function parameter name (easier)
 @Composable
-private fun ReceiptImage(uri: String, onRemove: () -> Unit) {  // ✅ Changed parameter name
+private fun ReceiptImage(uri: String, onRemove: () -> Unit) {
     Box(
         modifier = Modifier
             .size(80.dp)
             .clip(RoundedCornerShape(12.dp))
     ) {
         AsyncImage(
-            model = "data:image/webp;base64,$uri",  // ✅ Use uri instead
+            model = "data:image/webp;base64,$uri",
             contentDescription = "Receipt",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -686,16 +714,16 @@ private fun AddReceiptButton(
             .clip(RoundedCornerShape(12.dp))
             .border(
                 width = 2.dp,
-                color = if (isProcessing) Color(0xFF808080) else Color(0xFF5E92F3).copy(alpha = 0.5f),  // ✅ CHANGE THIS LINE
+                color = if (isProcessing) Color(0xFF808080) else Color(0xFF5E92F3).copy(alpha = 0.5f),
                 shape = RoundedCornerShape(12.dp)
             )
-            .clickable(enabled = !isProcessing, onClick = onClick)  // ✅ ADD enabled = !isProcessing
+            .clickable(enabled = !isProcessing, onClick = onClick)
             .background(
-                if (isProcessing) Color(0xFF404040) else Color(0xFF2962FF).copy(alpha = 0.1f)  // ✅ CHANGE THIS LINE
+                if (isProcessing) Color(0xFF404040) else Color(0xFF2962FF).copy(alpha = 0.1f)
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (isProcessing) {  // ✅ ADD THIS ENTIRE IF-ELSE BLOCK
+        if (isProcessing) {
             CircularProgressIndicator(
                 modifier = Modifier.size(28.dp),
                 strokeWidth = 2.dp,
@@ -802,6 +830,7 @@ private fun ImagePickerDialog(
                             contentDescription = null,
                             tint = Color(0xFF5E92F3),
                             modifier = Modifier.size(28.dp)
+
                         )
                         Column {
                             Text(

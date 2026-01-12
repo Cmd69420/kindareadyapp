@@ -206,6 +206,7 @@ class MultiLegExpenseViewModel(
 
     fun updateLegTransportMode(legIndex: Int, mode: TransportMode) {
         updateLeg(legIndex) { it.copy(transportMode = mode) }
+        calculateDistanceForLeg(legIndex) // Recalculate with new mode
     }
 
     fun updateLegAmount(legIndex: Int, amount: Double) {
@@ -235,12 +236,29 @@ class MultiLegExpenseViewModel(
         val end = leg.endLocation
 
         if (start != null && end != null) {
-            val distance = locationSearchRepo.calculateDistanceKm(start, end)
-            updateLeg(legIndex) { it.copy(distanceKm = distance) }
-            recalculateTotals()
+            viewModelScope.launch {
+                try {
+                    Timber.d("📏 Calculating route for leg $legIndex: ${leg.transportMode}")
+
+                    // ✅ Use route-based calculation
+                    val routeResult = locationSearchRepo.calculateRouteWithGeometry(
+                        start, end, leg.transportMode
+                    )
+
+                    updateLeg(legIndex) { it.copy(distanceKm = routeResult.distanceKm) }
+                    recalculateTotals()
+
+                    Timber.d("✅ Leg $legIndex route: ${routeResult.distanceKm} km")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to calculate route distance for leg $legIndex")
+                    // Fallback to straight-line
+                    val fallbackDistance = locationSearchRepo.calculateDistanceKm(start, end)
+                    updateLeg(legIndex) { it.copy(distanceKm = fallbackDistance) }
+                    recalculateTotals()
+                }
+            }
         }
     }
-
     private fun recalculateTotals() {
         val totalDistance = _uiState.value.legs.sumOf { it.distanceKm }
         val totalAmount = _uiState.value.legs.sumOf { it.amountSpent }

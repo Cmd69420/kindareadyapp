@@ -1,3 +1,4 @@
+// data/repository/LocationSearchRepository.kt
 package com.bluemix.clients_lead.data.repository
 
 import android.Manifest
@@ -7,6 +8,7 @@ import android.location.Location
 import androidx.core.app.ActivityCompat
 import com.bluemix.clients_lead.data.remote.NominatimApiService
 import com.bluemix.clients_lead.domain.model.LocationPlace
+import com.bluemix.clients_lead.domain.model.TransportMode
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
@@ -19,7 +21,8 @@ import timber.log.Timber
  */
 class LocationSearchRepository(
     private val context: Context,
-    private val nominatimApi: NominatimApiService
+    private val nominatimApi: NominatimApiService,
+    private val routeCalculator: RouteCalculationRepository // ✅ NEW
 ) {
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
@@ -104,7 +107,30 @@ class LocationSearchRepository(
     }
 
     /**
-     * Calculate distance between two points in kilometers
+     * ✅ NEW: Calculate route distance based on transport mode
+     */
+    suspend fun calculateRouteDistanceKm(
+        start: LocationPlace,
+        end: LocationPlace,
+        transportMode: TransportMode
+    ): Double {
+        return routeCalculator.calculateRouteDistance(start, end, transportMode)
+    }
+
+    /**
+     * ✅ NEW: Get route with geometry for visualization
+     */
+    suspend fun calculateRouteWithGeometry(
+        start: LocationPlace,
+        end: LocationPlace,
+        transportMode: TransportMode
+    ): RouteResult {
+        return routeCalculator.calculateRouteWithGeometry(start, end, transportMode)
+    }
+
+    /**
+     * Calculate straight-line distance between two points in kilometers
+     * Kept for backwards compatibility
      */
     fun calculateDistanceKm(start: LocationPlace, end: LocationPlace): Double {
         val results = FloatArray(1)
