@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * - Current user information (in-memory)
  * - Authentication state
  * - Session validity (via stored token)
+ * - User plan type (trial vs company)
  */
 class SessionManager(
     private val tokenStorage: TokenStorage
@@ -24,7 +25,7 @@ class SessionManager(
     // Public immutable state - exposed to rest of app
     val authState: StateFlow<AuthUser?> = _authState.asStateFlow()
 
-    // ✅ NEW: Session invalidation state
+    // ✅ Session invalidation state
     private val _sessionInvalidated = MutableStateFlow(false)
     val sessionInvalidated: StateFlow<Boolean> = _sessionInvalidated.asStateFlow()
 
@@ -33,7 +34,7 @@ class SessionManager(
      * Call this after successful login/signup.
      */
     fun setUser(user: AuthUser) {
-        Log.d("SessionManager", "👤 SET USER: ${user.email} (id: ${user.id})")
+        Log.d("SessionManager", "👤 SET USER: ${user.email} (id: ${user.id}, trial: ${user.isTrialUser})")
         _authState.value = user
         _sessionInvalidated.value = false // Reset invalidation flag
     }
@@ -54,6 +55,34 @@ class SessionManager(
         val email = _authState.value?.email
         Log.d("SessionManager", "📧 GET USER EMAIL: $email")
         return email
+    }
+
+    /**
+     * ✅ NEW: Check if current user is a trial user (generic email).
+     * Returns false for company email users.
+     */
+    fun isTrialUser(): Boolean {
+        val isTrialUser = _authState.value?.isTrialUser ?: false
+        Log.d("SessionManager", "🕒 IS TRIAL USER: $isTrialUser")
+        return isTrialUser
+    }
+
+    /**
+     * ✅ NEW: Get company ID if user belongs to a company.
+     */
+    fun getCompanyId(): String? {
+        val companyId = _authState.value?.companyId
+        Log.d("SessionManager", "🏢 GET COMPANY ID: $companyId")
+        return companyId
+    }
+
+    /**
+     * ✅ NEW: Get company name for display.
+     */
+    fun getCompanyName(): String? {
+        val companyName = _authState.value?.companyName
+        Log.d("SessionManager", "🏢 GET COMPANY NAME: $companyName")
+        return companyName
     }
 
     /**

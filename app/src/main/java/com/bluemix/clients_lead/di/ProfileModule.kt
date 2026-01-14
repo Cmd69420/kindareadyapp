@@ -37,7 +37,10 @@ val profileModule = module {
             signOut = get(),
             trackingStateManager = get(),
             getTotalExpense = get(),
-            updateUserProfile = get()
+            updateUserProfile = get(),
+            sessionManager = get(),
+            context = androidContext()
+
 
         )
     }

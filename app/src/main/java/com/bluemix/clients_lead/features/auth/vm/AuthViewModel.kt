@@ -29,7 +29,8 @@ data class State(
     val info: String? = null,
     val trialDaysRemaining: Long = 7,
     val isTrialExpired: Boolean = false,
-    val canCreateAccount: Boolean = true
+    val canCreateAccount: Boolean = true,
+    val showTrialBanner: Boolean = false  // ✅ NEW: For trial users only
 )
 
 class AuthViewModel(
@@ -52,23 +53,29 @@ class AuthViewModel(
     private val trialManager = TrialManager(context)
 
     init {
-        checkTrialStatus()
+        // Don't check trial status on init - we'll do it after login
+        // when we know the user's trial status from backend
     }
 
-    private fun checkTrialStatus() {
-        val isValid = trialManager.isTrialValid()
-        val daysRemaining = trialManager.getRemainingDays()
-        val canCreate = trialManager.canCreateAccount()
+    /**
+     * ✅ NEW: Update trial status based on user's actual trial flag from backend.
+     * Called after successful login/signup with user data.
+     */
+    private fun updateTrialStatus(isTrialUser: Boolean) {
+        trialManager.clearTrialIfCompanyUser(isTrialUser)
+        val isValid = trialManager.isTrialValid(isTrialUser)
+        val daysRemaining = trialManager.getRemainingDays(isTrialUser)
+        val showBanner = trialManager.shouldShowUpgradeBanner(isTrialUser)
 
         _state.update {
             it.copy(
                 isTrialExpired = !isValid,
                 trialDaysRemaining = daysRemaining,
-                canCreateAccount = canCreate
+                showTrialBanner = showBanner
             )
         }
 
-        Timber.d("🕐 Trial Status: Valid=$isValid, Days=$daysRemaining, CanCreate=$canCreate")
+        Timber.d("🕒 Trial Status Updated: isTrialUser=$isTrialUser, Valid=$isValid, Days=$daysRemaining, ShowBanner=$showBanner")
     }
 
     fun onEmailChange(email: String) {
@@ -80,12 +87,7 @@ class AuthViewModel(
     }
 
     fun doSignUp() {
-        // Trial validation
-        if (_state.value.isTrialExpired) {
-            _state.update { it.copy(error = "Trial period has ended. Please contact support.") }
-            return
-        }
-
+        // Check device account creation limit (applies to all users)
         if (!trialManager.canCreateAccount()) {
             _state.update { it.copy(error = "Account creation limit reached on this device.") }
             return
@@ -101,9 +103,22 @@ class AuthViewModel(
 
             when (val result = signUpWithEmail(email, password)) {
                 is AppResult.Success -> {
+                    // Record account creation
                     trialManager.recordAccountCreation()
-                    checkTrialStatus()
+
+                    // ✅ Update trial status based on backend response
+                    val isTrialUser = result.data.user.isTrialUser
+                    updateTrialStatus(isTrialUser)
+
                     _state.update { it.copy(loading = false) }
+
+                    // Show welcome message based on user type
+                    if (isTrialUser) {
+                        Timber.d("🕒 Trial user signed up: $email")
+                    } else {
+                        Timber.d("🏢 Company user signed up: $email (${result.data.user.companyName})")
+                    }
+
                     _effects.send(AuthEffect.SignedIn)
                 }
                 is AppResult.Error -> {
@@ -114,12 +129,6 @@ class AuthViewModel(
     }
 
     fun doSignIn() {
-        // Trial validation
-        if (_state.value.isTrialExpired) {
-            _state.update { it.copy(error = "Trial period has ended. Please contact support.") }
-            return
-        }
-
         val email = _state.value.email.trim()
         val password = _state.value.password
 
@@ -130,7 +139,19 @@ class AuthViewModel(
 
             when (val result = signInWithEmail(email, password)) {
                 is AppResult.Success -> {
+                    // ✅ Update trial status based on backend response
+                    val isTrialUser = result.data.user.isTrialUser
+                    updateTrialStatus(isTrialUser)
+
                     _state.update { it.copy(loading = false) }
+
+                    // Log user type
+                    if (isTrialUser) {
+                        Timber.d("🕒 Trial user logged in: $email")
+                    } else {
+                        Timber.d("🏢 Company user logged in: $email (${result.data.user.companyName})")
+                    }
+
                     _effects.send(AuthEffect.SignedIn)
                 }
                 is AppResult.Error -> {
@@ -205,8 +226,7 @@ class AuthViewModel(
                 if (error.message?.contains("TRIAL_EXPIRED") == true ||
                     error.message?.contains("expired") == true) {
                     trialManager.markTrialExpired()
-                    checkTrialStatus()
-                    "Your 7-day trial has ended. Please contact support."
+                    "Your 7-day trial has ended. Please use your company email to continue."
                 } else {
                     "Invalid email or password"
                 }
@@ -216,8 +236,7 @@ class AuthViewModel(
             is AppError.Forbidden -> {
                 if (error.message?.contains("TRIAL_EXPIRED") == true) {
                     trialManager.markTrialExpired()
-                    checkTrialStatus()
-                    "Your 7-day trial has ended. Please contact support."
+                    "Your 7-day trial has ended. Please use your company email to continue."
                 } else {
                     error.message ?: "Access denied"
                 }

@@ -3,10 +3,13 @@ package com.bluemix.clients_lead.features.settings.vm
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bluemix.clients_lead.core.common.utils.AppResult
+import com.bluemix.clients_lead.core.common.utils.TrialManager
+import com.bluemix.clients_lead.core.network.SessionManager
 import com.bluemix.clients_lead.domain.model.UserProfile
 import com.bluemix.clients_lead.domain.usecases.GetCurrentUserId
 import com.bluemix.clients_lead.domain.usecases.GetLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.GetTotalExpenseUseCase
+import android.content.Context
 import com.bluemix.clients_lead.domain.usecases.GetUserProfile
 import com.bluemix.clients_lead.domain.usecases.SaveLocationTrackingPreference
 import com.bluemix.clients_lead.domain.usecases.SignOut
@@ -27,7 +30,11 @@ data class ProfileUiState(
     val error: String? = null,
     val totalSpent: Double = 0.0,
     val showNameDialog: Boolean = false,
-    val isUpdatingName: Boolean = false
+    val isUpdatingName: Boolean = false,
+    val isTrialUser: Boolean = false,
+    val companyName: String? = null,
+    val trialDaysRemaining: Long = 0,
+    val showUpgradeSection: Boolean = false
 )
 
 class ProfileViewModel(
@@ -38,8 +45,13 @@ class ProfileViewModel(
     private val signOut: SignOut,
     private val trackingStateManager: LocationTrackingStateManager,
     private val getTotalExpense: GetTotalExpenseUseCase,
-    private val updateUserProfile: UpdateUserProfile
+    private val updateUserProfile: UpdateUserProfile,
+    private val sessionManager: SessionManager,
+    private val context: Context
 ) : ViewModel() {
+
+
+    private val trialManager = TrialManager(context)
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -47,7 +59,44 @@ class ProfileViewModel(
     init {
         loadProfile()
         observeTrackingState()
+        observeTrailStatus()
     }
+
+    private fun observeTrailStatus() {
+        viewModelScope.launch {
+            sessionManager.authState.collect { user ->
+                if (user != null) {
+                    val isTrialUser = user.isTrialUser
+                    val daysRemaining = trialManager.getRemainingDays(isTrialUser)
+
+                    _uiState.update {
+                        it.copy(
+                            isTrialUser = isTrialUser,
+                            companyName = user.companyName,
+                            trialDaysRemaining = daysRemaining,
+                            showUpgradeSection = isTrialUser == true// Show only for trial users
+                        )
+                    }
+
+                    Timber.d("📊 Profile trial status: isTrialUser=$isTrialUser, company=${user.companyName}, days=$daysRemaining")
+                }
+            }
+        }
+    }
+
+
+    fun onUpgradeClick() {
+        viewModelScope.launch {
+            // You can show a dialog, navigate to upgrade screen, or show instructions
+            // For now, let's just log it
+            Timber.d("💎 Upgrade clicked - Trial user wants to upgrade")
+
+            // Option 1: You could emit an effect to show a dialog
+            // Option 2: Navigate to an upgrade instructions screen
+            // Option 3: Show a toast with instructions
+        }
+    }
+
 
     private fun observeTrackingState() {
         viewModelScope.launch {

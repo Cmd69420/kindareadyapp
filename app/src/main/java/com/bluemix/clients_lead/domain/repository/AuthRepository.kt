@@ -6,7 +6,10 @@ import kotlinx.coroutines.flow.Flow
 data class AuthUser(
     val id: String,
     val email: String,
-    val token: String  // ✅ Add token here
+    val token: String,
+    val isTrialUser: Boolean = false,  // ✅ NEW: Indicates if user is on trial (generic email)
+    val companyId: String? = null,     // ✅ NEW: Company ID if assigned
+    val companyName: String? = null    // ✅ NEW: Company name for display
 )
 
 data class AuthResponse(
@@ -15,12 +18,12 @@ data class AuthResponse(
 )
 
 interface AuthRepository {
-    suspend fun signIn(email: String, password: String): AppResult<AuthResponse>  // ✅ Changed return type
-    suspend fun signUp(email: String, password: String): AppResult<AuthResponse>  // ✅ Changed return type
+    suspend fun signIn(email: String, password: String): AppResult<AuthResponse>
+    suspend fun signUp(email: String, password: String): AppResult<AuthResponse>
     suspend fun signOut(): AppResult<Unit>
     suspend fun isLoggedIn(): Boolean
     suspend fun currentUserId(): String?
     suspend fun sendMagicLink(email: String, redirectUrl: String? = null): AppResult<Unit>
     fun authState(): Flow<AuthUser?>
-    suspend fun handleAuthRedirect(url: String): AppResult<AuthUser>  // ✅ Changed return type
+    suspend fun handleAuthRedirect(url: String): AppResult<AuthUser>
 }

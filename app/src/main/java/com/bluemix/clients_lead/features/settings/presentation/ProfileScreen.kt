@@ -71,6 +71,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bluemix.clients_lead.features.settings.vm.ProfileViewModel
+import com.bluemix.clients_lead.features.settings.presentation.components.UpgradeSection
+import androidx.compose.material3.TextButton
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import ui.AppTheme
@@ -250,6 +252,13 @@ private fun AnimatedProfileContent(
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
+        if (uiState.showUpgradeSection) {
+               AnimatedUpgradeSection(
+                       isTrialUser = true,
+                   daysRemaining = uiState.trialDaysRemaining,
+                         onUpgradeClick = { /* Handle upgrade */ }    )
+            }
+
         AnimatedUserCard(
             fullName = profile.fullName ?: profile.email ?: "User",
             userId = profile.userId,
@@ -276,12 +285,21 @@ private fun AnimatedProfileContent(
                     index = 0
                 )
 
+                if (!uiState.isTrialUser && uiState.companyName != null) {
+                              AnimatedProfileMenuItem(
+                                    icon = Icons.Default.Business,
+                                    title = "Company",
+                                    subtitle = uiState.companyName ?: "",
+                                    index = 1
+                              )
+                           }
+
                 profile.department?.let {
                     AnimatedProfileMenuItem(
                         icon = Icons.Default.Business,
                         title = "Department",
                         subtitle = it,
-                        index = 1
+                        index = if (!uiState.isTrialUser && uiState.companyName != null) 2 else 1
                     )
                 }
 
@@ -829,5 +847,48 @@ private fun formatDate(dateString: String): String {
         outputFormat.format(date ?: Date())
     } catch (e: Exception) {
         "Unknown"
+    }
+}
+
+// ✅ ADD THIS NEW COMPOSABLE
+@Composable
+private fun AnimatedUpgradeSection(
+    isTrialUser: Boolean,
+    daysRemaining: Long,
+    onUpgradeClick: () -> Unit
+) {
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(50)
+        isVisible = true
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.9f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "upgradeScale"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(500),
+        label = "upgradeAlpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .graphicsLayer { this.alpha = alpha }
+    ) {
+        UpgradeSection(
+            isTrialUser = isTrialUser,
+            daysRemaining = daysRemaining,
+            onUpgradeClick = onUpgradeClick
+        )
     }
 }

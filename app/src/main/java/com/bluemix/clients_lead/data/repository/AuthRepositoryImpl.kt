@@ -12,6 +12,7 @@ import com.bluemix.clients_lead.core.network.TokenStorage
 import com.bluemix.clients_lead.domain.repository.AuthRepository
 import com.bluemix.clients_lead.domain.repository.AuthResponse
 import com.bluemix.clients_lead.domain.repository.AuthUser
+import com.bluemix.clients_lead.core.common.utils.TrialManager
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -22,21 +23,20 @@ class AuthRepositoryImpl(
     private val httpClient: HttpClient,
     private val sessionManager: SessionManager,
     private val tokenStorage: TokenStorage,
-    private val context: Context // ✅ Added context for DeviceIdentifier
+    private val context: Context
 ) : AuthRepository {
 
     override suspend fun signIn(email: String, password: String): AppResult<AuthResponse> =
         runAppCatching(mapper = { it.toAppError() }) {
             Log.d("AUTH", "Attempting login to: ${ApiEndpoints.BASE_URL}${ApiEndpoints.Auth.LOGIN}")
 
-            // ✅ Get device ID for trial tracking
             val deviceId = DeviceIdentifier.getDeviceId(context)
 
             val response = httpClient.post(ApiEndpoints.Auth.LOGIN) {
                 setBody(LoginRequest(
                     email = email,
                     password = password,
-                    deviceId = deviceId // ✅ Send device ID to backend
+                    deviceId = deviceId
                 ))
             }.body<LoginResponse>()
 
@@ -45,14 +45,23 @@ class AuthRepositoryImpl(
             // Save token immediately
             tokenStorage.saveToken(response.token)
 
+            // ✅ Parse isTrialUser from backend response
             val authUser = AuthUser(
                 id = response.user.id,
                 email = response.user.email,
-                token = response.token
+                token = response.token,
+                isTrialUser = response.user.isTrialUser ?: false,  // ✅ NEW
+                companyId = response.user.companyId,                // ✅ NEW
+                companyName = response.user.companyName             // ✅ NEW
             )
+            // ✅ CLEAR DEVICE TRIAL STATE IF COMPANY USER (AUTO-LOGIN FIX)
+            TrialManager(context).clearTrialIfCompanyUser(authUser.isTrialUser)
+
 
             // Update session with user info
             sessionManager.setUser(authUser)
+
+            Log.d("AUTH", "✅ User logged in - Trial: ${authUser.isTrialUser}, Company: ${authUser.companyName}")
 
             // Return the auth response
             AuthResponse(token = response.token, user = authUser)
@@ -60,28 +69,33 @@ class AuthRepositoryImpl(
 
     override suspend fun signUp(email: String, password: String): AppResult<AuthResponse> =
         runAppCatching(mapper = { it.toAppError() }) {
-            // ✅ Get device ID for trial tracking
             val deviceId = DeviceIdentifier.getDeviceId(context)
 
             val response = httpClient.post(ApiEndpoints.Auth.SIGNUP) {
                 setBody(SignupRequest(
                     email = email,
                     password = password,
-                    deviceId = deviceId // ✅ Send device ID to backend
+                    deviceId = deviceId
                 ))
             }.body<SignupResponse>()
 
             // Save token immediately
             tokenStorage.saveToken(response.token)
 
+            // ✅ Parse isTrialUser from backend response
             val authUser = AuthUser(
                 id = response.user.id,
                 email = response.user.email,
-                token = response.token
+                token = response.token,
+                isTrialUser = response.user.isTrialUser ?: true,   // ✅ Default to trial if not specified
+                companyId = response.user.companyId,                // ✅ NEW
+                companyName = response.user.companyName             // ✅ NEW
             )
 
             // Update session with user info
             sessionManager.setUser(authUser)
+
+            Log.d("AUTH", "✅ User signed up - Trial: ${authUser.isTrialUser}, Company: ${authUser.companyName}")
 
             // Return the auth response
             AuthResponse(token = response.token, user = authUser)
@@ -91,7 +105,6 @@ class AuthRepositoryImpl(
         runAppCatching(mapper = { it.toAppError() }) {
             // Clear session and token
             sessionManager.clearSession()
-            // Token will expire after 7 days on backend
         }
 
     override suspend fun isLoggedIn(): Boolean =
@@ -108,18 +121,23 @@ class AuthRepositoryImpl(
         // Fetch profile to restore session
         if (tokenStorage.hasToken()) {
             try {
-                Log.d("AUTH", "📥 Restoring user session from token...")
+                Log.d("AUTH", "🔥 Restoring user session from token...")
                 val response = httpClient.get(ApiEndpoints.Auth.PROFILE).body<ProfileResponse>()
 
                 val token = tokenStorage.getToken()!!
+
+                // ✅ Restore full user data including trial status
                 val authUser = AuthUser(
                     id = response.user.id,
                     email = response.user.email,
-                    token = token
+                    token = token,
+                    isTrialUser = response.user.isTrialUser ?: false,  // ✅ NEW
+                    companyId = response.user.companyId,                // ✅ NEW
+                    companyName = response.user.companyName             // ✅ NEW
                 )
 
                 sessionManager.setUser(authUser)
-                Log.d("AUTH", "✅ Session restored for user: ${response.user.email}")
+                Log.d("AUTH", "✅ Session restored for user: ${response.user.email} (Trial: ${authUser.isTrialUser})")
                 return response.user.id
 
             } catch (e: Exception) {
@@ -153,7 +171,7 @@ class AuthRepositoryImpl(
 data class LoginRequest(
     val email: String,
     val password: String,
-    val deviceId: String? = null // ✅ Added device ID
+    val deviceId: String? = null
 )
 
 @Serializable
@@ -164,7 +182,7 @@ data class SignupRequest(
     val department: String? = null,
     val workHoursStart: String? = null,
     val workHoursEnd: String? = null,
-    val deviceId: String? = null // ✅ Added device ID
+    val deviceId: String? = null
 )
 
 @Serializable
@@ -178,7 +196,8 @@ data class LoginResponse(
 data class SignupResponse(
     val message: String,
     val token: String,
-    val user: UserDataWithProfile
+    val user: UserDataWithProfile,
+    val signupType: String? = null  // "trial" or "company"
 )
 
 @Serializable
@@ -188,7 +207,10 @@ data class UserData(
     val fullName: String? = null,
     val department: String? = null,
     val workHoursStart: String? = null,
-    val workHoursEnd: String? = null
+    val workHoursEnd: String? = null,
+    val isTrialUser: Boolean? = null,      // ✅ NEW
+    val companyId: String? = null,          // ✅ NEW
+    val companyName: String? = null         // ✅ NEW
 )
 
 @Serializable
@@ -196,7 +218,10 @@ data class UserDataWithProfile(
     val id: String,
     val email: String,
     val profile: ProfileData? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val isTrialUser: Boolean? = null,      // ✅ NEW
+    val companyId: String? = null,          // ✅ NEW
+    val companyName: String? = null         // ✅ NEW
 )
 
 @Serializable
