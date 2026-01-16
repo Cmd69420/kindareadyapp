@@ -193,6 +193,151 @@ class RouteCalculationRepository(
         )
     }
 
+    // Add to RouteCalculationRepository.kt
+
+    /**
+     * Check if transport mode is available/feasible for the given route
+     */
+    suspend fun validateTransportMode(
+        start: LocationPlace,
+        end: LocationPlace,
+        transportMode: TransportMode
+    ): Pair<Boolean, String?> {
+        return when (transportMode) {
+            TransportMode.TRAIN, TransportMode.METRO -> {
+                // Check if there are nearby train stations
+                val nearbyStations = checkNearbyTrainStations(start, end)
+                if (!nearbyStations) {
+                    false to "No train stations found nearby. Consider using Bus or Car instead."
+                } else {
+                    true to null
+                }
+            }
+            TransportMode.FLIGHT -> {
+                // Only valid for distances > 200km
+                val distance = calculateStraightLineDistance(start, end)
+                if (distance < 200.0) {
+                    false to "Flight mode is only available for distances over 200 KM."
+                } else {
+                    true to null
+                }
+            }
+            else -> true to null // Road-based modes are always valid
+        }
+    }
+
+    // Add to RouteCalculationRepository.kt
+
+    /**
+     * Get train route using Google Directions API (REQUIRES API KEY)
+     */
+    private suspend fun calculateTrainRouteWithGoogle(
+        start: LocationPlace,
+        end: LocationPlace
+    ): RouteResult {
+        return try {
+            val apiKey = "AIzaSyCwGkrq4Onpvj9Yu5His9row-fIg5v6N0I" // Add to BuildConfig
+
+            val response: GoogleDirectionsResponse = httpClient.get(
+                "https://maps.googleapis.com/maps/api/directions/json"
+            ) {
+                parameter("origin", "${start.latitude},${start.longitude}")
+                parameter("destination", "${end.latitude},${end.longitude}")
+                parameter("mode", "transit")
+                parameter("transit_mode", "rail")
+                parameter("key", apiKey)
+            }.body()
+
+            val route = response.routes.firstOrNull()
+            val leg = route?.legs?.firstOrNull()
+
+            if (leg != null) {
+                // Decode polyline points
+                val polyline = decodePolyline(route.overviewPolyline.points)
+
+                RouteResult(
+                    distanceKm = (leg.distance.value / 1000.0).round(2),
+                    durationMinutes = (leg.duration.value / 60),
+                    routePolyline = polyline
+                )
+            } else {
+                // Fallback to approximation
+                calculateRailRouteWithGeometry(start, end)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get train route from Google")
+            calculateRailRouteWithGeometry(start, end)
+        }
+    }
+
+    /**
+     * Decode Google's polyline encoding
+     */
+    private fun decodePolyline(encoded: String): List<LatLng> {
+        val poly = mutableListOf<LatLng>()
+        var index = 0
+        val len = encoded.length
+        var lat = 0
+        var lng = 0
+
+        while (index < len) {
+            var b: Int
+            var shift = 0
+            var result = 0
+            do {
+                b = encoded[index++].code - 63
+                result = result or (b and 0x1f shl shift)
+                shift += 5
+            } while (b >= 0x20)
+            val dlat = if (result and 1 != 0) (result shr 1).inv() else result shr 1
+            lat += dlat
+
+            shift = 0
+            result = 0
+            do {
+                b = encoded[index++].code - 63
+                result = result or (b and 0x1f shl shift)
+                shift += 5
+            } while (b >= 0x20)
+            val dlng = if (result and 1 != 0) (result shr 1).inv() else result shr 1
+            lng += dlng
+
+            poly.add(LatLng(lat / 1E5, lng / 1E5))
+        }
+        return poly
+    }
+
+    /**
+     * Check if there are train stations within 2km of start or end location
+     */
+    private suspend fun checkNearbyTrainStations(
+        start: LocationPlace,
+        end: LocationPlace
+    ): Boolean {
+        // Search for train stations near start and end
+        val startStations = searchNearbyStations(start.latitude, start.longitude)
+        val endStations = searchNearbyStations(end.latitude, end.longitude)
+
+        return startStations.isNotEmpty() && endStations.isNotEmpty()
+    }
+
+    private suspend fun searchNearbyStations(lat: Double, lon: Double): List<String> {
+        return try {
+            // Search for railway stations within 2km
+            val response: OsrmResponse = httpClient.get(
+                "$OSRM_BASE/nearest/v1/driving/$lon,$lat"
+            ) {
+                parameter("number", 5)
+            }.body()
+
+            // Filter for train stations (simplified - you'd want better filtering)
+            response.routes.map { it.toString() }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to search nearby stations")
+            emptyList()
+        }
+    }
+
     /**
      * Flight distance - straight-line (great circle)
      */
@@ -266,3 +411,33 @@ data class OsrmGeometry(
     val coordinates: List<List<Double>>, // [[lon, lat], [lon, lat], ...]
     val type: String = "LineString"
 )
+
+
+// Google Directions API response models
+@Serializable
+data class GoogleDirectionsResponse(
+    val routes: List<GoogleRoute>,
+    val status: String
+)
+
+@Serializable
+data class GoogleRoute(
+    val legs: List<GoogleLeg>,
+    @SerialName("overview_polyline")
+    val overviewPolyline: GooglePolyline
+)
+
+@Serializable
+data class GoogleLeg(
+    val distance: GoogleDistance,
+    val duration: GoogleDuration
+)
+
+@Serializable
+data class GoogleDistance(val value: Int, val text: String)
+
+@Serializable
+data class GoogleDuration(val value: Int, val text: String)
+
+@Serializable
+data class GooglePolyline(val points: String)

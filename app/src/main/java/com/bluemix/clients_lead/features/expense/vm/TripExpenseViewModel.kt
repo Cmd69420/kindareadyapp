@@ -379,9 +379,29 @@ class TripExpenseViewModel(
     // UI UPDATES
     // ============================================
 
+    // In TripExpenseViewModel.kt
+
     fun updateTransportMode(mode: TransportMode) {
-        _uiState.value = _uiState.value.copy(transportMode = mode)
-        calculateDistance()
+        viewModelScope.launch {
+            val start = _uiState.value.startLocation
+            val end = _uiState.value.endLocation
+
+            if (start != null && end != null) {
+                // Validate mode first
+                val (isValid, errorMsg) = routeCalculator.validateTransportMode(start, end, mode)
+
+                if (!isValid) {
+                    _uiState.value = _uiState.value.copy(
+                        error = errorMsg,
+                        transportMode = TransportMode.BUS // Fallback to bus
+                    )
+                    return@launch
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(transportMode = mode, error = null)
+            calculateDistance()
+        }
     }
 
     fun updateAmount(amount: Double) {

@@ -665,9 +665,10 @@ private fun SectionCard(
 
 @Composable
 private fun TransportModeCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     isSelected: Boolean,
+    isEnabled: Boolean = true, // ✅ NEW
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -676,15 +677,22 @@ private fun TransportModeCard(
             .aspectRatio(1.3f)
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if (isSelected) Color(0xFF2962FF).copy(alpha = 0.2f)
-                else Color(0xFF1A1A1A)
+                when {
+                    !isEnabled -> Color(0xFF0D0D0D)
+                    isSelected -> Color(0xFF2962FF).copy(alpha = 0.2f)
+                    else -> Color(0xFF1A1A1A)
+                }
             )
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) Color(0xFF5E92F3) else Color(0xFF303030),
+                color = when {
+                    !isEnabled -> Color(0xFF404040)
+                    isSelected -> Color(0xFF5E92F3)
+                    else -> Color(0xFF303030)
+                },
                 shape = RoundedCornerShape(16.dp)
             )
-            .clickable(onClick = onClick)
+            .clickable(enabled = isEnabled, onClick = onClick)
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -695,13 +703,31 @@ private fun TransportModeCard(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) Color(0xFF5E92F3) else Color(0xFF808080),
+                tint = when {
+                    !isEnabled -> Color(0xFF404040)
+                    isSelected -> Color(0xFF5E92F3)
+                    else -> Color(0xFF808080)
+                },
                 modifier = Modifier.size(36.dp)
             )
             Text(
                 text = label,
                 style = AppTheme.typography.body1,
-                color = if (isSelected) Color(0xFF5E92F3) else Color.White
+                color = when {
+                    !isEnabled -> Color(0xFF404040)
+                    isSelected -> Color(0xFF5E92F3)
+                    else -> Color.White
+                }
+            )
+        }
+
+        // ✅ Show "Not Available" badge
+        if (!isEnabled) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(8.dp)
+                    .background(Color(0xFFFF5252), RoundedCornerShape(4.dp))
             )
         }
     }
