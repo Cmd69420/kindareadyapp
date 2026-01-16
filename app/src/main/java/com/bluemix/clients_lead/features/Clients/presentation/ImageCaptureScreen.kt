@@ -71,14 +71,20 @@ fun ImageCaptureDialog(
     ) { uri: Uri? ->
         uri?.let {
             try {
-                val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
+                // ✅ Use safe image decoding with downsampling
+                val bitmap = decodeSampledBitmapFromUri(
+                    context = context,
+                    uri = uri,
+                    reqWidth = 1920,
+                    reqHeight = 1080
+                )
                 bitmap?.let { bmp ->
                     capturedBitmap = bmp
                     imageQuality = analyzeImageQuality(bmp)
                     showAccuracyIndicator = true
                 }
+            } catch (e: OutOfMemoryError) {
+                Timber.e(e, "Out of memory loading gallery image")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load image from gallery")
             }
@@ -481,6 +487,61 @@ private fun PermissionDeniedScreen(
 /* ===================== HELPERS =========================== */
 /* ========================================================= */
 
+
+
+/**
+ * Decode bitmap with downsampling to avoid OOM on old devices
+ */
+private fun decodeSampledBitmapFromUri(
+    context: Context,
+    uri: Uri,
+    reqWidth: Int,
+    reqHeight: Int
+): Bitmap? {
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            // First decode with inJustDecodeBounds=true to check dimensions
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeStream(stream, null, options)
+
+            // Calculate inSampleSize
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+
+            // Decode bitmap with inSampleSize set
+            options.inJustDecodeBounds = false
+            options.inPreferredConfig = Bitmap.Config.RGB_565 // Use less memory
+
+            context.contentResolver.openInputStream(uri)?.use { stream2 ->
+                BitmapFactory.decodeStream(stream2, null, options)
+            }
+        }
+    } catch (e: Exception) {
+        Timber.e(e, "Error decoding bitmap")
+        null
+    }
+}
+
+private fun calculateInSampleSize(
+    options: BitmapFactory.Options,
+    reqWidth: Int,
+    reqHeight: Int
+): Int {
+    val (height: Int, width: Int) = options.outHeight to options.outWidth
+    var inSampleSize = 1
+
+    if (height > reqHeight || width > reqWidth) {
+        val halfHeight: Int = height / 2
+        val halfWidth: Int = width / 2
+
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+
+    return inSampleSize
+}
 private suspend fun takePicture(
     context: Context,
     imageCapture: ImageCapture

@@ -28,6 +28,12 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
 import com.google.android.gms.maps.model.LatLng
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 // UI model for a single leg being edited
 data class TripLegUiModel(
@@ -511,36 +517,124 @@ class MultiLegExpenseViewModel(
 
     fun processAndUploadImage(context: Context, uri: Uri) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isProcessingImage = true,
-                imageProcessingProgress = "Compressing image..."
-            )
+            try {
+                _uiState.value = _uiState.value.copy(
+                    isProcessingImage = true,
+                    imageProcessingProgress = "Loading image..."
+                )
 
-            val result = ImageCompressionUtils.compressToWebP(
-                context = context,
-                uri = uri,
-                maxWidth = 1280,
-                maxHeight = 1280,
-                quality = 80
-            )
-
-            result.fold(
-                onSuccess = { base64 ->
-                    _uiState.value = _uiState.value.copy(
-                        receiptImages = _uiState.value.receiptImages + base64,
-                        isProcessingImage = false,
-                        imageProcessingProgress = null
-                    )
-                },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isProcessingImage = false,
-                        imageProcessingProgress = null,
-                        error = "Image processing failed: ${error.message}"
+                // ✅ Decode with safe limits to prevent OOM
+                val bitmap = withContext(Dispatchers.IO) {
+                    decodeSampledBitmapFromUri(
+                        context = context,
+                        uri = uri,
+                        reqWidth = 1920,
+                        reqHeight = 1080
                     )
                 }
-            )
+
+                if (bitmap == null) {
+                    _uiState.value = _uiState.value.copy(
+                        isProcessingImage = false,
+                        error = "Failed to load image"
+                    )
+                    return@launch
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    imageProcessingProgress = "Compressing image..."
+                )
+
+                // ✅ Compress to WebP
+                val compressedBase64 = withContext(Dispatchers.IO) {
+                    compressToWebP(bitmap, quality = 80)
+                }
+
+                bitmap.recycle() // ✅ Free memory immediately
+
+                _uiState.value = _uiState.value.copy(
+                    receiptImages = _uiState.value.receiptImages + compressedBase64,
+                    isProcessingImage = false,
+                    imageProcessingProgress = null
+                )
+
+            } catch (e: OutOfMemoryError) {
+                Timber.e(e, "Out of memory processing image")
+                _uiState.value = _uiState.value.copy(
+                    isProcessingImage = false,
+                    error = "Image too large. Please try a smaller image.",
+                    imageProcessingProgress = null
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Error processing image")
+                _uiState.value = _uiState.value.copy(
+                    isProcessingImage = false,
+                    error = "Failed to process image: ${e.message}",
+                    imageProcessingProgress = null
+                )
+            }
         }
+    }
+    private fun decodeSampledBitmapFromUri(
+        context: Context,
+        uri: Uri,
+        reqWidth: Int,
+        reqHeight: Int
+    ): Bitmap? {
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeStream(stream, null, options)
+
+                options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+                options.inJustDecodeBounds = false
+                options.inPreferredConfig = Bitmap.Config.RGB_565
+
+                context.contentResolver.openInputStream(uri)?.use { stream2 ->
+                    BitmapFactory.decodeStream(stream2, null, options)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error decoding bitmap")
+            null
+        }
+    }
+
+    private fun calculateInSampleSize(
+        options: BitmapFactory.Options,
+        reqWidth: Int,
+        reqHeight: Int
+    ): Int {
+        val (height: Int, width: Int) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight: Int = height / 2
+            val halfWidth: Int = width / 2
+
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+
+        return inSampleSize
+    }
+
+    private fun compressToWebP(bitmap: Bitmap, quality: Int = 80): String {
+        val outputStream = ByteArrayOutputStream()
+
+        // ✅ Use WEBP_LOSSY for API 30+, fallback to WEBP for older devices
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, outputStream)
+        } else {
+            @Suppress("DEPRECATION")
+            bitmap.compress(Bitmap.CompressFormat.WEBP, quality, outputStream)
+        }
+
+        val byteArray = outputStream.toByteArray()
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
 
     fun removeReceipt(uri: String) {
@@ -643,6 +737,9 @@ class MultiLegExpenseViewModel(
 
     fun resetError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+    fun setError(message: String) {
+        _uiState.value = _uiState.value.copy(error = message)
     }
 
     fun resetSuccess() {

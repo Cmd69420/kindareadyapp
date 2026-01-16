@@ -78,8 +78,10 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
         resources {
-            // avoid META-INF collisions from Ktor/Coroutines/Okio/etc.
             excludes += setOf(
                 "META-INF/AL2.0",
                 "META-INF/LGPL2.1",
@@ -92,15 +94,12 @@ android {
 
 dependencies {
 
-
     implementation("androidx.compose.material3:material3:1.1.2")
 
     // Already have these from your project
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
-
-
 
     // Core
     implementation(libs.androidx.core.ktx)
@@ -124,12 +123,14 @@ dependencies {
     implementation("com.google.maps.android:places-ktx:3.1.0")
     implementation("com.google.android.libraries.places:places:3.3.0")
 
-
     // Material Icons Extended (if not included)
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
 
-    // Coil for image loading
-    implementation("io.coil-kt:coil-compose:2.4.0")
+    // ❌ REMOVE THIS - You have it duplicated below
+    // implementation("io.coil-kt:coil-compose:2.4.0")
+
+    // ✅ KEEP THIS ONE (latest version)
+    implementation("io.coil-kt:coil-compose:2.5.0")
 
     val ktorVersion = "2.3.7"
     implementation("io.ktor:ktor-client-core:$ktorVersion")
@@ -168,7 +169,6 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.compose)
 
-
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Misc
@@ -177,27 +177,11 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-
     // ML Kit Text Recognition
-    implementation("com.google.mlkit:text-recognition:16.0.0")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
-    // Camera X for image capture
-    implementation("androidx.camera:camera-camera2:1.3.0")
-    implementation("androidx.camera:camera-lifecycle:1.3.0")
-    implementation("androidx.camera:camera-view:1.3.0")
-
-    // Coil for image loading
-    implementation("io.coil-kt:coil-compose:2.5.0")
-
-    // Camera and image compression
-    implementation("androidx.camera:camera-camera2:1.3.1")
-    implementation("androidx.camera:camera-lifecycle:1.3.1")
-    implementation("androidx.camera:camera-view:1.3.1")
-    implementation("io.coil-kt:coil-compose:2.5.0")
-
-    // For WebP conversion (if not already present)
-    implementation("androidx.core:core-ktx:1.12.0")
-
-
-
+    // CameraX
+    implementation("androidx.camera:camera-camera2:1.4.0")
+    implementation("androidx.camera:camera-lifecycle:1.4.0")
+    implementation("androidx.camera:camera-view:1.4.0")
 }

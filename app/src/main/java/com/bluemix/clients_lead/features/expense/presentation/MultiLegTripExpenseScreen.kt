@@ -102,8 +102,20 @@ fun MultiLegTripExpenseSheet(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let { viewModel.processAndUploadImage(context, it) }
+        uri?.let {
+            try {
+                viewModel.processAndUploadImage(context, it)
+            } catch (e: OutOfMemoryError) {
+                Timber.e(e, "Out of memory loading gallery image")
+                viewModel.setError("Image too large. Please try a smaller image.")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load image from gallery")
+                viewModel.setError("Failed to load image: ${e.message}")
+            }
+        }
     }
+
+
 
     LaunchedEffect(uiState.successMessage) {
         if (uiState.successMessage != null) {

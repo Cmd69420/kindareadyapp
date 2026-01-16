@@ -92,8 +92,16 @@ fun TripExpenseSheet(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            Timber.d("🖼️ Image selected from gallery: $uri")
-            viewModel.processAndUploadImage(context, it)
+            try {
+                Timber.d("🖼️ Image selected from gallery: $uri")
+                viewModel.processAndUploadImage(context, it)
+            } catch (e: OutOfMemoryError) {
+                Timber.e(e, "Out of memory loading gallery image")
+                viewModel.setError("Image too large. Please try a smaller image.")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load image from gallery")
+                viewModel.setError("Failed to load image: ${e.message}")
+            }
         }
     }
 
