@@ -14,6 +14,11 @@ import com.bluemix.clients_lead.domain.model.TransportMode
 import com.bluemix.clients_lead.domain.model.TripExpense
 import com.bluemix.clients_lead.domain.model.TripLeg
 import com.bluemix.clients_lead.domain.usecases.SubmitTripExpenseUseCase
+import com.bluemix.clients_lead.domain.model.DraftExpense
+import com.bluemix.clients_lead.domain.model.toDraftLocation
+import com.bluemix.clients_lead.domain.model.toLocationPlace
+import com.bluemix.clients_lead.domain.model.toDraftString
+import com.bluemix.clients_lead.domain.model.toTransportMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
+import com.google.android.gms.maps.model.LatLng
 
 // UI model for a single leg being edited
 data class TripLegUiModel(
@@ -35,7 +41,10 @@ data class TripLegUiModel(
     val transportMode: TransportMode = TransportMode.BUS,
     val amountSpent: Double = 0.0,
     val notes: String = "",
-    val legNumber: Int
+    val legNumber: Int,
+    // ✅ NEW: Route visualization data
+    val routePolyline: List<LatLng>? = null,
+    val estimatedDuration: Int = 0
 )
 
 data class MultiLegTripUiState(
@@ -45,7 +54,7 @@ data class MultiLegTripUiState(
 
     // Legs
     val legs: List<TripLegUiModel> = listOf(
-        TripLegUiModel(legNumber = 1) // Start with one leg
+        TripLegUiModel(legNumber = 1)
     ),
     val currentEditingLegIndex: Int = 0,
 
@@ -66,9 +75,15 @@ data class MultiLegTripUiState(
     // UI state
     val isSubmitting: Boolean = false,
     val error: String? = null,
-    val successMessage: String? = null
-)
-{
+    val successMessage: String? = null,
+
+    // ✅ NEW: Draft management
+    val currentDraftId: String? = null,
+    val isSaving: Boolean = false,
+    val lastSaved: Long? = null,
+    val availableDrafts: List<DraftExpense> = emptyList(),
+    val showDraftsList: Boolean = false
+) {
     val canSubmit: Boolean
         get() = tripName.isNotBlank()
                 && legs.isNotEmpty()
@@ -78,18 +93,35 @@ data class MultiLegTripUiState(
                     it.distanceKm > 0
         }
                 && !isSubmitting
-}
 
+    // ✅ NEW: Check if there are unsaved changes
+    val hasUnsavedChanges: Boolean
+        get() = tripName.isNotBlank() ||
+                legs.any {
+                    it.startLocation != null ||
+                            it.endLocation != null ||
+                            it.amountSpent > 0 ||
+                            it.notes.isNotBlank()
+                } ||
+                receiptImages.isNotEmpty()
+}
 class MultiLegExpenseViewModel(
     private val submitExpense: SubmitTripExpenseUseCase,
     private val sessionManager: SessionManager,
-    private val locationSearchRepo: LocationSearchRepository
+    private val locationSearchRepo: LocationSearchRepository,
+    private val draftRepository: DraftExpenseRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MultiLegTripUiState())
     val uiState: StateFlow<MultiLegTripUiState> = _uiState.asStateFlow()
 
     private var searchJob: Job? = null
+    private var autoSaveJob: Job? = null  // ✅ NEW
+
+    init {
+        loadDrafts()      // ✅ NEW
+        startAutoSave()   // ✅ NEW
+    }
 
     // ============================================
     // LEG MANAGEMENT
@@ -111,6 +143,186 @@ class MultiLegExpenseViewModel(
         )
 
         Timber.d("➕ Added leg ${newLeg.legNumber}")
+    }
+
+    private fun startAutoSave() {
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            while (true) {
+                delay(30_000) // Auto-save every 30 seconds
+                if (_uiState.value.hasUnsavedChanges) {
+                    saveDraft(showConfirmation = false)
+                }
+            }
+        }
+    }
+
+    fun loadDrafts() {
+        viewModelScope.launch {
+            val userId = sessionManager.getCurrentUserId() ?: return@launch
+
+            draftRepository.getDrafts(userId).fold(
+                onSuccess = { drafts ->
+                    // Filter only multi-leg drafts
+                    val multiLegDrafts = drafts.filter { it.isMultiLeg }
+                    _uiState.value = _uiState.value.copy(
+                        availableDrafts = multiLegDrafts
+                    )
+                    Timber.d("📋 Loaded ${multiLegDrafts.size} multi-leg drafts")
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to load drafts")
+                }
+            )
+        }
+    }
+
+    fun saveDraft(showConfirmation: Boolean = true) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val userId = sessionManager.getCurrentUserId() ?: return@launch
+
+            if (!state.hasUnsavedChanges) {
+                if (showConfirmation) {
+                    _uiState.value = state.copy(error = "Nothing to save")
+                }
+                return@launch
+            }
+
+            _uiState.value = state.copy(isSaving = true, error = null)
+
+            try {
+                // Convert legs to JSON or use first leg for draft
+                val firstLeg = state.legs.firstOrNull()
+
+                val draft = DraftExpense(
+                    id = state.currentDraftId ?: UUID.randomUUID().toString(),
+                    userId = userId,
+                    tripName = state.tripName.ifBlank { null },
+                    startLocation = firstLeg?.startLocation?.toDraftLocation(),
+                    endLocation = state.legs.lastOrNull()?.endLocation?.toDraftLocation(),
+                    travelDate = state.travelDate,
+                    distanceKm = state.totalDistanceKm,
+                    transportMode = firstLeg?.transportMode?.toDraftString() ?: "BUS",
+                    amountSpent = state.totalAmountSpent,
+                    notes = "Multi-leg trip: ${state.legs.size} legs",
+                    receiptImages = state.receiptImages,
+                    isMultiLeg = true,
+                    lastModified = System.currentTimeMillis()
+                )
+
+                draftRepository.saveDraft(draft).fold(
+                    onSuccess = { savedDraft ->
+                        _uiState.value = state.copy(
+                            currentDraftId = savedDraft.id,
+                            isSaving = false,
+                            lastSaved = savedDraft.lastModified,
+                            successMessage = if (showConfirmation) "Draft saved successfully" else null
+                        )
+                        loadDrafts()
+                        Timber.i("💾 Multi-leg draft saved: ${savedDraft.id}")
+
+                        if (showConfirmation) {
+                            viewModelScope.launch {
+                                delay(2000)
+                                resetSuccess()
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.value = state.copy(
+                            isSaving = false,
+                            error = "Failed to save draft: ${error.message}"
+                        )
+                        Timber.e(error, "Failed to save draft")
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.value = state.copy(
+                    isSaving = false,
+                    error = "Error saving draft: ${e.message}"
+                )
+                Timber.e(e, "Exception while saving draft")
+            }
+        }
+    }
+
+    fun loadDraft(draftId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoadingCurrentLocation = true,
+                error = null
+            )
+
+            draftRepository.getDraftById(draftId).fold(
+                onSuccess = { draft ->
+                    if (draft == null || !draft.isMultiLeg) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingCurrentLocation = false,
+                            error = "Multi-leg draft not found"
+                        )
+                        return@launch
+                    }
+
+                    // Recreate basic trip structure from draft
+                    val newLeg = TripLegUiModel(
+                        legNumber = 1,
+                        startLocation = draft.startLocation?.toLocationPlace(),
+                        endLocation = draft.endLocation?.toLocationPlace(),
+                        endLocationQuery = draft.endLocation?.displayName ?: "",
+                        distanceKm = draft.distanceKm,
+                        transportMode = draft.transportMode.toTransportMode(),
+                        amountSpent = draft.amountSpent
+                    )
+
+                    _uiState.value = MultiLegTripUiState(
+                        currentDraftId = draft.id,
+                        tripName = draft.tripName ?: "",
+                        travelDate = draft.travelDate,
+                        legs = listOf(newLeg),
+                        receiptImages = draft.receiptImages,
+                        lastSaved = draft.lastModified,
+                        availableDrafts = _uiState.value.availableDrafts,
+                        isLoadingCurrentLocation = false
+                    )
+
+                    Timber.i("📄 Multi-leg draft loaded: ${draft.id}")
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingCurrentLocation = false,
+                        error = "Failed to load draft: ${error.message}"
+                    )
+                    Timber.e(error, "Failed to load draft")
+                }
+            )
+        }
+    }
+
+    fun deleteDraft(draftId: String) {
+        viewModelScope.launch {
+            draftRepository.deleteDraft(draftId).fold(
+                onSuccess = {
+                    loadDrafts()
+                    if (_uiState.value.currentDraftId == draftId) {
+                        _uiState.value = _uiState.value.copy(currentDraftId = null)
+                    }
+                    Timber.i("🗑️ Draft deleted: $draftId")
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        error = "Failed to delete draft: ${error.message}"
+                    )
+                    Timber.e(error, "Failed to delete draft")
+                }
+            )
+        }
+    }
+
+    fun toggleDraftsList() {
+        _uiState.value = _uiState.value.copy(
+            showDraftsList = !_uiState.value.showDraftsList
+        )
     }
 
     fun removeLeg(index: Int) {
@@ -239,22 +451,33 @@ class MultiLegExpenseViewModel(
         if (start != null && end != null) {
             viewModelScope.launch {
                 try {
-                    Timber.d("📏 Calculating route for leg $legIndex: ${leg.transportMode}")
+                    Timber.d("🗺️ Calculating route for leg $legIndex: ${leg.transportMode}")
 
-                    // ✅ Use route-based calculation
+                    // ✅ Get full route with geometry
                     val routeResult = locationSearchRepo.calculateRouteWithGeometry(
                         start, end, leg.transportMode
                     )
 
-                    updateLeg(legIndex) { it.copy(distanceKm = routeResult.distanceKm) }
+                    updateLeg(legIndex) {
+                        it.copy(
+                            distanceKm = routeResult.distanceKm,
+                            routePolyline = routeResult.routePolyline,
+                            estimatedDuration = routeResult.durationMinutes
+                        )
+                    }
                     recalculateTotals()
 
-                    Timber.d("✅ Leg $legIndex route: ${routeResult.distanceKm} km")
+                    Timber.d("✅ Leg $legIndex route: ${routeResult.distanceKm} km, ${routeResult.durationMinutes} min")
                 } catch (e: Exception) {
-                    Timber.e(e, "Failed to calculate route distance for leg $legIndex")
-                    // Fallback to straight-line
+                    Timber.e(e, "Failed to calculate route for leg $legIndex")
                     val fallbackDistance = locationSearchRepo.calculateDistanceKm(start, end)
-                    updateLeg(legIndex) { it.copy(distanceKm = fallbackDistance) }
+                    updateLeg(legIndex) {
+                        it.copy(
+                            distanceKm = fallbackDistance,
+                            routePolyline = null,
+                            estimatedDuration = 0
+                        )
+                    }
                     recalculateTotals()
                 }
             }
@@ -424,5 +647,10 @@ class MultiLegExpenseViewModel(
 
     fun resetSuccess() {
         _uiState.value = _uiState.value.copy(successMessage = null)
+    }
+    override fun onCleared() {
+        super.onCleared()
+        autoSaveJob?.cancel()  // ✅ NEW
+        searchJob?.cancel()
     }
 }

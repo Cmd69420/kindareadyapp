@@ -92,7 +92,8 @@ val expenseModule = module {
         MultiLegExpenseViewModel(
             submitExpense = get(),
             sessionManager = get(),
-            locationSearchRepo = get()
+            locationSearchRepo = get(),
+            draftRepository = get()
         )
     }
 }

@@ -12,31 +12,20 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import timber.log.Timber
 
-/**
- * Result containing route information
- */
 data class RouteResult(
     val distanceKm: Double,
     val durationMinutes: Int,
     val routePolyline: List<LatLng>? = null
 )
 
-/**
- * FREE Routing APIs:
- * 1. OSRM (OpenStreetMap) - Road routing - NO API KEY
- * 2. Straight-line calculations for rail/flight
- */
 class RouteCalculationRepository(
     private val httpClient: HttpClient
 ) {
     companion object {
-        // OSRM for road-based transport (car, bus, bike)
         private const val OSRM_BASE = "https://router.project-osrm.org"
+        private const val OVERPASS_API = "https://overpass-api.de/api/interpreter"
     }
 
-    /**
-     * Calculate route distance based on transport mode
-     */
     suspend fun calculateRouteDistance(
         start: LocationPlace,
         end: LocationPlace,
@@ -49,7 +38,7 @@ class RouteCalculationRepository(
 
             TransportMode.BIKE -> calculateRoadDistance(start, end, "bike")
 
-            TransportMode.BUS -> calculateRoadDistance(start, end, "car") // Buses follow roads
+            TransportMode.BUS -> calculateRoadDistance(start, end, "car")
 
             TransportMode.TRAIN,
             TransportMode.METRO -> calculateRailDistance(start, end)
@@ -58,9 +47,6 @@ class RouteCalculationRepository(
         }
     }
 
-    /**
-     * Calculate route with geometry for visualization
-     */
     suspend fun calculateRouteWithGeometry(
         start: LocationPlace,
         end: LocationPlace,
@@ -76,24 +62,124 @@ class RouteCalculationRepository(
             TransportMode.BUS -> calculateRoadRouteWithGeometry(start, end, "car")
 
             TransportMode.TRAIN,
-            TransportMode.METRO -> calculateRailRouteWithGeometry(start, end)
+            TransportMode.METRO -> calculateTrainRouteWithGoogle(start, end)
 
             TransportMode.FLIGHT -> calculateFlightRouteWithGeometry(start, end)
         }
     }
 
-    /**
-     * Get road-based distance using OSRM (FREE, no API key)
-     */
+    // ✅ FIXED: Proper validation with railway station checking
+    suspend fun validateTransportMode(
+        start: LocationPlace,
+        end: LocationPlace,
+        transportMode: TransportMode
+    ): Pair<Boolean, String?> {
+        return when (transportMode) {
+            TransportMode.TRAIN, TransportMode.METRO -> {
+                val distance = calculateStraightLineDistance(start, end)
+
+                // Basic distance checks
+                when {
+                    distance < 5.0 -> {
+                        return false to "Train not recommended for distances under 5 KM. Try Bus or Bike instead."
+                    }
+                    distance > 500.0 -> {
+                        return false to "Distance too long for train calculation. Consider Flight mode."
+                    }
+                }
+
+                // Check for nearby railway stations
+                try {
+                    Timber.d("🚂 Checking for railway stations near locations...")
+                    val hasStations = checkNearbyTrainStations(start, end)
+
+                    if (!hasStations) {
+                        false to "No railway stations found within 3 KM of start or end location. Try Bus or Rickshaw instead."
+                    } else {
+                        Timber.d("✅ Railway stations found, train mode available")
+                        true to null
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "❌ Station check failed, allowing train mode anyway")
+                    // If check fails, allow train mode (graceful degradation)
+                    true to null
+                }
+            }
+
+            TransportMode.FLIGHT -> {
+                val distance = calculateStraightLineDistance(start, end)
+                if (distance < 200.0) {
+                    false to "Flight mode is only available for distances over 200 KM."
+                } else {
+                    true to null
+                }
+            }
+
+            else -> true to null // Road modes always available
+        }
+    }
+
+    // ✅ FIXED: Check for railway stations using Overpass API
+    private suspend fun checkNearbyTrainStations(
+        start: LocationPlace,
+        end: LocationPlace
+    ): Boolean {
+        val startHasStation = searchNearbyStations(start.latitude, start.longitude)
+        val endHasStation = searchNearbyStations(end.latitude, end.longitude)
+
+        Timber.d("🚉 Station check: start=$startHasStation, end=$endHasStation")
+        return startHasStation && endHasStation
+    }
+
+    // ✅ FIXED: Use Overpass API to find actual railway stations
+    private suspend fun searchNearbyStations(lat: Double, lon: Double): Boolean {
+        return try {
+            val radius = 3000 // 3km search radius
+
+            // Overpass QL query to find railway stations
+            val query = """
+                [out:json][timeout:10];
+                (
+                  node["railway"="station"](around:$radius,$lat,$lon);
+                  node["railway"="halt"](around:$radius,$lat,$lon);
+                  node["public_transport"="station"]["train"="yes"](around:$radius,$lat,$lon);
+                );
+                out body;
+            """.trimIndent()
+
+            Timber.d("🔍 Searching for stations near ($lat, $lon)...")
+
+            val response: OverpassResponse = httpClient.get(OVERPASS_API) {
+                parameter("data", query)
+            }.body()
+
+            val stationCount = response.elements.size
+            Timber.d("🚉 Found $stationCount railway stations within 3km")
+
+            if (stationCount > 0) {
+                // Log station names for debugging
+                response.elements.take(3).forEach { station ->
+                    val name = station.tags?.get("name") ?: "Unknown"
+                    Timber.d("  - $name")
+                }
+            }
+
+            stationCount > 0
+
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Failed to search stations via Overpass API")
+            // Return true to allow train mode if API fails
+            true
+        }
+    }
+
     private suspend fun calculateRoadDistance(
         start: LocationPlace,
         end: LocationPlace,
-        profile: String // "car" or "bike"
+        profile: String
     ): Double {
         return try {
             val url = "$OSRM_BASE/route/v1/$profile/${start.longitude},${start.latitude};${end.longitude},${end.latitude}"
-
-            Timber.d("🛣️ Calculating road distance via OSRM: $profile")
 
             val response: OsrmResponse = httpClient.get(url) {
                 parameter("overview", "false")
@@ -101,20 +187,14 @@ class RouteCalculationRepository(
             }.body()
 
             val distanceMeters = response.routes.firstOrNull()?.distance ?: 0.0
-            val distanceKm = distanceMeters / 1000.0
-
-            Timber.d("✅ Road distance: ${String.format("%.2f", distanceKm)} km")
-            distanceKm.round(2)
+            (distanceMeters / 1000.0).round(2)
 
         } catch (e: Exception) {
-            Timber.e(e, "❌ OSRM routing failed, falling back to straight-line")
+            Timber.e(e, "❌ OSRM routing failed, using straight-line")
             calculateStraightLineDistance(start, end)
         }
     }
 
-    /**
-     * Get road route with geometry from OSRM
-     */
     private suspend fun calculateRoadRouteWithGeometry(
         start: LocationPlace,
         end: LocationPlace,
@@ -123,23 +203,18 @@ class RouteCalculationRepository(
         return try {
             val url = "$OSRM_BASE/route/v1/$profile/${start.longitude},${start.latitude};${end.longitude},${end.latitude}"
 
-            Timber.d("🛣️ Calculating road route with geometry: $profile")
-
             val response: OsrmResponse = httpClient.get(url) {
-                parameter("overview", "full") // Get full geometry
-                parameter("geometries", "geojson") // GeoJSON format
+                parameter("overview", "full")
+                parameter("geometries", "geojson")
             }.body()
 
             val route = response.routes.firstOrNull()
             val distanceKm = (route?.distance ?: 0.0) / 1000.0
             val durationMinutes = ((route?.duration ?: 0.0) / 60.0).toInt()
 
-            // Convert GeoJSON coordinates to LatLng
             val polyline = route?.geometry?.coordinates?.map { coord ->
-                LatLng(coord[1], coord[0]) // GeoJSON is [lon, lat]
+                LatLng(coord[1], coord[0])
             } ?: emptyList()
-
-            Timber.d("✅ Road route: ${String.format("%.2f", distanceKm)} km, $durationMinutes min, ${polyline.size} points")
 
             RouteResult(
                 distanceKm = distanceKm.round(2),
@@ -149,7 +224,6 @@ class RouteCalculationRepository(
 
         } catch (e: Exception) {
             Timber.e(e, "❌ Failed to get route geometry")
-            // Fallback: straight line
             RouteResult(
                 distanceKm = calculateStraightLineDistance(start, end),
                 durationMinutes = 0,
@@ -161,82 +235,23 @@ class RouteCalculationRepository(
         }
     }
 
-    /**
-     * Rail distance - approximate using straight-line + 20% detour factor
-     */
     private suspend fun calculateRailDistance(
         start: LocationPlace,
         end: LocationPlace
     ): Double {
-        Timber.d("🚂 Calculating rail distance (straight-line + 20%)")
         val straightLine = calculateStraightLineDistance(start, end)
-        val railDistance = straightLine * 1.2 // Rail routes typically 20% longer
-        return railDistance.round(2)
+        return (straightLine * 1.2).round(2)
     }
 
-    /**
-     * Rail route with geometry - approximate with straight line
-     */
-    private suspend fun calculateRailRouteWithGeometry(
-        start: LocationPlace,
-        end: LocationPlace
-    ): RouteResult {
-        Timber.d("🚂 Calculating rail route (straight-line approximation)")
-        val straightLine = calculateStraightLineDistance(start, end)
-        return RouteResult(
-            distanceKm = (straightLine * 1.2).round(2),
-            durationMinutes = 0,
-            routePolyline = listOf(
-                LatLng(start.latitude, start.longitude),
-                LatLng(end.latitude, end.longitude)
-            )
-        )
-    }
-
-    // Add to RouteCalculationRepository.kt
-
-    /**
-     * Check if transport mode is available/feasible for the given route
-     */
-    suspend fun validateTransportMode(
-        start: LocationPlace,
-        end: LocationPlace,
-        transportMode: TransportMode
-    ): Pair<Boolean, String?> {
-        return when (transportMode) {
-            TransportMode.TRAIN, TransportMode.METRO -> {
-                // Check if there are nearby train stations
-                val nearbyStations = checkNearbyTrainStations(start, end)
-                if (!nearbyStations) {
-                    false to "No train stations found nearby. Consider using Bus or Car instead."
-                } else {
-                    true to null
-                }
-            }
-            TransportMode.FLIGHT -> {
-                // Only valid for distances > 200km
-                val distance = calculateStraightLineDistance(start, end)
-                if (distance < 200.0) {
-                    false to "Flight mode is only available for distances over 200 KM."
-                } else {
-                    true to null
-                }
-            }
-            else -> true to null // Road-based modes are always valid
-        }
-    }
-
-    // Add to RouteCalculationRepository.kt
-
-    /**
-     * Get train route using Google Directions API (REQUIRES API KEY)
-     */
+    // ✅ NOW ACTUALLY USED: Google Directions API for train routes
     private suspend fun calculateTrainRouteWithGoogle(
         start: LocationPlace,
         end: LocationPlace
     ): RouteResult {
         return try {
-            val apiKey = "AIzaSyCwGkrq4Onpvj9Yu5His9row-fIg5v6N0I" // Add to BuildConfig
+            val apiKey = "AIzaSyCwGkrq4Onpvj9Yu5His9row-fIg5v6N0I"
+
+            Timber.d("🚂 Fetching train route from Google Directions API...")
 
             val response: GoogleDirectionsResponse = httpClient.get(
                 "https://maps.googleapis.com/maps/api/directions/json"
@@ -248,12 +263,18 @@ class RouteCalculationRepository(
                 parameter("key", apiKey)
             }.body()
 
+            if (response.status != "OK") {
+                Timber.w("⚠️ Google API status: ${response.status}, falling back to approximation")
+                return calculateRailRouteWithGeometry(start, end)
+            }
+
             val route = response.routes.firstOrNull()
             val leg = route?.legs?.firstOrNull()
 
-            if (leg != null) {
-                // Decode polyline points
+            if (leg != null && route.overviewPolyline.points.isNotEmpty()) {
                 val polyline = decodePolyline(route.overviewPolyline.points)
+
+                Timber.d("✅ Google train route: ${leg.distance.value / 1000.0} km, ${leg.duration.value / 60} min")
 
                 RouteResult(
                     distanceKm = (leg.distance.value / 1000.0).round(2),
@@ -261,18 +282,30 @@ class RouteCalculationRepository(
                     routePolyline = polyline
                 )
             } else {
-                // Fallback to approximation
+                Timber.w("⚠️ No route found in Google response, falling back")
                 calculateRailRouteWithGeometry(start, end)
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to get train route from Google")
+            Timber.e(e, "❌ Failed to get train route from Google")
             calculateRailRouteWithGeometry(start, end)
         }
     }
 
-    /**
-     * Decode Google's polyline encoding
-     */
+    private suspend fun calculateRailRouteWithGeometry(
+        start: LocationPlace,
+        end: LocationPlace
+    ): RouteResult {
+        val straightLine = calculateStraightLineDistance(start, end)
+        return RouteResult(
+            distanceKm = (straightLine * 1.2).round(2),
+            durationMinutes = 0,
+            routePolyline = listOf(
+                LatLng(start.latitude, start.longitude),
+                LatLng(end.latitude, end.longitude)
+            )
+        )
+    }
+
     private fun decodePolyline(encoded: String): List<LatLng> {
         val poly = mutableListOf<LatLng>()
         var index = 0
@@ -307,56 +340,17 @@ class RouteCalculationRepository(
         return poly
     }
 
-    /**
-     * Check if there are train stations within 2km of start or end location
-     */
-    private suspend fun checkNearbyTrainStations(
-        start: LocationPlace,
-        end: LocationPlace
-    ): Boolean {
-        // Search for train stations near start and end
-        val startStations = searchNearbyStations(start.latitude, start.longitude)
-        val endStations = searchNearbyStations(end.latitude, end.longitude)
-
-        return startStations.isNotEmpty() && endStations.isNotEmpty()
-    }
-
-    private suspend fun searchNearbyStations(lat: Double, lon: Double): List<String> {
-        return try {
-            // Search for railway stations within 2km
-            val response: OsrmResponse = httpClient.get(
-                "$OSRM_BASE/nearest/v1/driving/$lon,$lat"
-            ) {
-                parameter("number", 5)
-            }.body()
-
-            // Filter for train stations (simplified - you'd want better filtering)
-            response.routes.map { it.toString() }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to search nearby stations")
-            emptyList()
-        }
-    }
-
-    /**
-     * Flight distance - straight-line (great circle)
-     */
     private suspend fun calculateFlightDistance(
         start: LocationPlace,
         end: LocationPlace
     ): Double {
-        Timber.d("✈️ Calculating flight distance (great circle)")
         return calculateStraightLineDistance(start, end)
     }
 
-    /**
-     * Flight route with geometry - straight line
-     */
     private suspend fun calculateFlightRouteWithGeometry(
         start: LocationPlace,
         end: LocationPlace
     ): RouteResult {
-        Timber.d("✈️ Calculating flight route (straight-line)")
         return RouteResult(
             distanceKm = calculateStraightLineDistance(start, end),
             durationMinutes = 0,
@@ -367,9 +361,6 @@ class RouteCalculationRepository(
         )
     }
 
-    /**
-     * Fallback: Haversine straight-line distance
-     */
     private fun calculateStraightLineDistance(
         start: LocationPlace,
         end: LocationPlace
@@ -401,19 +392,18 @@ data class OsrmResponse(
 
 @Serializable
 data class OsrmRoute(
-    val distance: Double, // meters
-    val duration: Double, // seconds
+    val distance: Double,
+    val duration: Double,
     val geometry: OsrmGeometry? = null
 )
 
 @Serializable
 data class OsrmGeometry(
-    val coordinates: List<List<Double>>, // [[lon, lat], [lon, lat], ...]
+    val coordinates: List<List<Double>>,
     val type: String = "LineString"
 )
 
-
-// Google Directions API response models
+// Google Directions API DTOs
 @Serializable
 data class GoogleDirectionsResponse(
     val routes: List<GoogleRoute>,
@@ -441,3 +431,18 @@ data class GoogleDuration(val value: Int, val text: String)
 
 @Serializable
 data class GooglePolyline(val points: String)
+
+// ✅ Overpass API DTOs for railway station search
+@Serializable
+data class OverpassResponse(
+    val elements: List<OverpassElement>
+)
+
+@Serializable
+data class OverpassElement(
+    val type: String,
+    val id: Long,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val tags: Map<String, String>? = null
+)

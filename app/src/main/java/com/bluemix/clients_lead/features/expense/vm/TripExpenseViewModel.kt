@@ -388,7 +388,7 @@ class TripExpenseViewModel(
 
             if (start != null && end != null) {
                 // Validate mode first
-                val (isValid, errorMsg) = routeCalculator.validateTransportMode(start, end, mode)
+                val (isValid, errorMsg) = locationSearchRepo.validateTransportMode(start, end, mode)
 
                 if (!isValid) {
                     _uiState.value = _uiState.value.copy(

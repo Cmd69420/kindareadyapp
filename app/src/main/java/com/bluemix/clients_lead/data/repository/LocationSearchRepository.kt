@@ -106,6 +106,13 @@ class LocationSearchRepository(
             emptyList()
         }
     }
+    suspend fun validateTransportMode(
+        start: LocationPlace,
+        end: LocationPlace,
+        transportMode: TransportMode
+    ): Pair<Boolean, String?> {
+        return routeCalculator.validateTransportMode(start, end, transportMode)
+    }
 
     /**
      * ✅ NEW: Calculate route distance based on transport mode
