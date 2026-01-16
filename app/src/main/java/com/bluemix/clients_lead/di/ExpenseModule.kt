@@ -18,11 +18,13 @@ import kotlinx.serialization.json.Json
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
+import com.bluemix.clients_lead.data.repository.DraftExpenseRepository
 import com.bluemix.clients_lead.features.expense.vm.MultiLegExpenseViewModel
 
 val expenseModule = module {
     // Repository
     single<ExpenseRepository> { ExpenseRepositoryImpl(get()) }
+    single { DraftExpenseRepository(androidContext()) }
 
     // ✅ Nominatim HTTP Client (separate from main API client)
     single<HttpClient>(qualifier = org.koin.core.qualifier.named("nominatim")) {
@@ -81,7 +83,8 @@ val expenseModule = module {
             submitExpense = get(),
             uploadReceipt = get(),
             sessionManager = get(),
-            locationSearchRepo = get()
+            locationSearchRepo = get(),
+            draftRepository = get()
         )
     }
 

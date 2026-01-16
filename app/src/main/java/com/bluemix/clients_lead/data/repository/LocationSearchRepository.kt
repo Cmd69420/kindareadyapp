@@ -8,6 +8,7 @@ import android.location.Location
 import androidx.core.app.ActivityCompat
 import com.bluemix.clients_lead.data.remote.NominatimApiService
 import com.bluemix.clients_lead.domain.model.LocationPlace
+import com.bluemix.clients_lead.data.repository.RouteResult
 import com.bluemix.clients_lead.domain.model.TransportMode
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
