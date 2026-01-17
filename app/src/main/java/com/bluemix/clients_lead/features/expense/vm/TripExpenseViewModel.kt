@@ -349,23 +349,81 @@ class TripExpenseViewModel(
     // CALCULATIONS
     // ============================================
 
+    // ============================================
+    // UI UPDATES
+    // ============================================
+
+    // In TripExpenseViewModel.kt
+
+    // TripExpenseViewModel.kt - Replace updateTransportMode function
+
+    fun updateTransportMode(mode: TransportMode) {
+        viewModelScope.launch {
+            val start = _uiState.value.startLocation
+            val end = _uiState.value.endLocation
+
+            // ✅ CRITICAL: Validate BEFORE updating mode and calculating route
+            if (start != null && end != null) {
+                val (isValid, errorMsg) = locationSearchRepo.validateTransportMode(start, end, mode)
+
+                if (!isValid) {
+                    // ❌ Validation failed - show error and DON'T change mode
+                    _uiState.value = _uiState.value.copy(
+                        error = errorMsg
+                    )
+                    Timber.w("❌ Transport mode $mode rejected: $errorMsg")
+                    return@launch  // ✅ STOP HERE - don't calculate route
+                }
+            }
+
+            // ✅ Validation passed - update mode and calculate route
+            _uiState.value = _uiState.value.copy(
+                transportMode = mode,
+                error = null
+            )
+
+            Timber.d("✅ Transport mode changed to $mode")
+
+            // Only calculate distance if we have both locations
+            if (start != null && end != null) {
+                calculateDistance()
+            }
+        }
+    }
+
+    // ✅ Also update calculateDistance to add extra validation
     private fun calculateDistance() {
         val start = _uiState.value.startLocation
         val end = _uiState.value.endLocation
+        val mode = _uiState.value.transportMode
 
         if (start != null && end != null) {
             viewModelScope.launch {
                 try {
-                    Timber.d("🗺️ Calculating route: ${_uiState.value.transportMode}")
+                    // ✅ Double-check validation before calculating
+                    val (isValid, errorMsg) = locationSearchRepo.validateTransportMode(start, end, mode)
+
+                    if (!isValid) {
+                        _uiState.value = _uiState.value.copy(
+                            error = errorMsg,
+                            distanceKm = 0.0,
+                            estimatedDuration = 0,
+                            routePolyline = null
+                        )
+                        return@launch
+                    }
+
+                    Timber.d("🗺️ Calculating route: $mode")
 
                     val routeResult = locationSearchRepo.calculateRouteWithGeometry(
-                        start, end, _uiState.value.transportMode
+                        start, end, mode
                     )
 
                     _uiState.value = _uiState.value.copy(
                         distanceKm = routeResult.distanceKm,
                         estimatedDuration = routeResult.durationMinutes,
-                        routePolyline = routeResult.routePolyline
+                        routePolyline = routeResult.routePolyline,
+                        error = null
                     )
 
                     Timber.d("✅ Route calculated: ${routeResult.distanceKm} km")
@@ -374,39 +432,11 @@ class TripExpenseViewModel(
                     val fallbackDistance = locationSearchRepo.calculateDistanceKm(start, end)
                     _uiState.value = _uiState.value.copy(
                         distanceKm = fallbackDistance,
-                        routePolyline = null
+                        routePolyline = null,
+                        estimatedDuration = 0
                     )
                 }
             }
-        }
-    }
-
-    // ============================================
-    // UI UPDATES
-    // ============================================
-
-    // In TripExpenseViewModel.kt
-
-    fun updateTransportMode(mode: TransportMode) {
-        viewModelScope.launch {
-            val start = _uiState.value.startLocation
-            val end = _uiState.value.endLocation
-
-            if (start != null && end != null) {
-                // Validate mode first
-                val (isValid, errorMsg) = locationSearchRepo.validateTransportMode(start, end, mode)
-
-                if (!isValid) {
-                    _uiState.value = _uiState.value.copy(
-                        error = errorMsg,
-                        transportMode = TransportMode.BUS // Fallback to bus
-                    )
-                    return@launch
-                }
-            }
-
-            _uiState.value = _uiState.value.copy(transportMode = mode, error = null)
-            calculateDistance()
         }
     }
 

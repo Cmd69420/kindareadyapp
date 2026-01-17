@@ -424,8 +424,32 @@ class MultiLegExpenseViewModel(
     // ============================================
 
     fun updateLegTransportMode(legIndex: Int, mode: TransportMode) {
-        updateLeg(legIndex) { it.copy(transportMode = mode) }
-        calculateDistanceForLeg(legIndex) // Recalculate with new mode
+        viewModelScope.launch {
+            val leg = _uiState.value.legs.getOrNull(legIndex) ?: return@launch
+            val start = leg.startLocation
+            val end = leg.endLocation
+
+            // ✅ CRITICAL: Validate BEFORE updating mode
+            if (start != null && end != null) {
+                val (isValid, errorMsg) = locationSearchRepo.validateTransportMode(start, end, mode)
+
+                if (!isValid) {
+                    // ❌ Validation failed - show error and DON'T change mode
+                    _uiState.value = _uiState.value.copy(error = errorMsg)
+                    Timber.w("❌ Leg $legIndex: Transport mode $mode rejected: $errorMsg")
+                    return@launch  // ✅ STOP HERE
+                }
+            }
+
+            // ✅ Validation passed - update mode
+            updateLeg(legIndex) { it.copy(transportMode = mode) }
+            _uiState.value = _uiState.value.copy(error = null)
+
+            Timber.d("✅ Leg $legIndex: Transport mode changed to $mode")
+
+            // Recalculate route with new mode
+            calculateDistanceForLeg(legIndex)
+        }
     }
 
     fun updateLegAmount(legIndex: Int, amount: Double) {
@@ -457,9 +481,25 @@ class MultiLegExpenseViewModel(
         if (start != null && end != null) {
             viewModelScope.launch {
                 try {
+                    // ✅ Validate before calculating
+                    val (isValid, errorMsg) = locationSearchRepo.validateTransportMode(
+                        start, end, leg.transportMode
+                    )
+
+                    if (!isValid) {
+                        _uiState.value = _uiState.value.copy(error = errorMsg)
+                        updateLeg(legIndex) {
+                            it.copy(
+                                distanceKm = 0.0,
+                                routePolyline = null,
+                                estimatedDuration = 0
+                            )
+                        }
+                        return@launch
+                    }
+
                     Timber.d("🗺️ Calculating route for leg $legIndex: ${leg.transportMode}")
 
-                    // ✅ Get full route with geometry
                     val routeResult = locationSearchRepo.calculateRouteWithGeometry(
                         start, end, leg.transportMode
                     )

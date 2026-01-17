@@ -388,7 +388,7 @@ fun TripExpenseSheet(
                                 modifier = Modifier.weight(1f)
                             )
                             TransportModeCard(
-                                icon = Icons.Default.DirectionsCar,
+                                icon = Icons.Default.ElectricRickshaw,
                                 label = "Rickshaw",
                                 isSelected = uiState.transportMode == TransportMode.RICKSHAW,
                                 onClick = { viewModel.updateTransportMode(TransportMode.RICKSHAW) },
