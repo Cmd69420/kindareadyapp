@@ -86,9 +86,16 @@ class UploadMeetingAttachment(
 ) {
     suspend operator fun invoke(
         meetingId: String,
-        fileData: ByteArray,
-        fileName: String
+        fileData: String,
+        fileName: String,
+        fileType: String,
+        fileSizeMB: Double
     ): AppResult<String> {
-        return repository.uploadAttachment(meetingId, fileData, fileName)
+        return repository.uploadAttachment(
+            meetingId = meetingId,
+            fileData = fileData,
+            fileName = fileName,
+            fileType = fileType,
+            fileSizeMB = fileSizeMB)
     }
 }

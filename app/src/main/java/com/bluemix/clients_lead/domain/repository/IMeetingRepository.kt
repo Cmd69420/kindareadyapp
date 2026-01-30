@@ -36,7 +36,19 @@ interface IMeetingRepository {
     suspend fun getClientMeetings(clientId: String): AppResult<List<Meeting>>
 
     /**
-     * Upload attachment for a meeting
+     * ✅ UPDATED: Upload attachment for a meeting
+     * @param meetingId Meeting ID
+     * @param fileData Base64-encoded file data
+     * @param fileName File name
+     * @param fileType MIME type
+     * @param fileSizeMB File size in megabytes
+     * @return Attachment ID from server
      */
-    suspend fun uploadAttachment(meetingId: String, fileData: ByteArray, fileName: String): AppResult<String>
+    suspend fun uploadAttachment(
+        meetingId: String,
+        fileData: String,
+        fileName: String,
+        fileType: String,
+        fileSizeMB: Double
+    ): AppResult<String>
 }

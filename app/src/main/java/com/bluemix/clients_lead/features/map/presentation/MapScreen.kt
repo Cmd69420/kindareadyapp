@@ -400,6 +400,8 @@ fun MapScreen(
                             client = client,
                             activeMeeting = meetingUiState.activeMeeting,
                             isLoading = meetingUiState.isLoading,
+                            pendingAttachments = meetingUiState.pendingAttachments,  // ✅ CORRECT - use meetingUiState
+                            isUploadingAttachments = meetingUiState.isUploadingAttachments,  // ✅ CORRECT - use meetingUiState
                             onStartMeeting = {
                                 meetingViewModel.startMeeting(
                                     clientId = client.id,
@@ -408,17 +410,22 @@ fun MapScreen(
                                     accuracy = null
                                 )
                             },
-                            onEndMeeting = { comments, clientStatus, attachments ->
-                                meetingViewModel.endMeeting(comments, clientStatus, attachments)
+                            onEndMeeting = { comments, clientStatus ->  // ✅ CORRECT - only 2 parameters
+                                meetingViewModel.endMeeting(comments, clientStatus)  // ✅ CORRECT - only 2 arguments
                                 showMeetingSheet = false
                                 proximityClient = null
                                 ProximityDetector.resetProximityState(client.id)
+                            },
+                            onAddAttachment = { uri ->  // ✅ CORRECT - use meetingViewModel
+                                meetingViewModel.addAttachment(uri)
+                            },
+                            onRemoveAttachment = { attachment ->  // ✅ CORRECT - use meetingViewModel
+                                meetingViewModel.removeAttachment(attachment)
                             },
                             onDismiss = {
                                 showMeetingSheet = false
                                 proximityClient = null
                             }
-
                         )
                     }
                 }

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bluemix.clients_lead.domain.model.Client
 import com.bluemix.clients_lead.domain.model.Meeting
+import com.bluemix.clients_lead.features.meeting.vm.AttachmentInfo
 import ui.AppTheme
 import ui.components.Icon
 import ui.components.IconButton
@@ -38,21 +39,27 @@ fun MeetingBottomSheet(
     client: Client,
     activeMeeting: Meeting?,
     isLoading: Boolean,
+    pendingAttachments: List<AttachmentInfo>,
+    isUploadingAttachments: Boolean,
     onStartMeeting: () -> Unit,
-    onEndMeeting: (comments: String, clientStatus: String, attachments: List<Uri>) -> Unit, // ✅ UPDATED
+    onEndMeeting: (comments: String, clientStatus: String) -> Unit,
+    onAddAttachment: (Uri) -> Unit,
+    onRemoveAttachment: (AttachmentInfo) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var comments by remember { mutableStateOf("") }
-    var selectedClientStatus by remember { mutableStateOf(client.status) } // ✅ NEW: Track client status
-    var attachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var selectedClientStatus by remember { mutableStateOf(client.status) }
     var showEndConfirmation by remember { mutableStateOf(false) }
     var showDismissWarning by remember { mutableStateOf(false) }
 
+    // ✅ File picker launcher for ANY file type
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
-        attachments = uris
+        uris.forEach { uri ->
+            onAddAttachment(uri)
+        }
     }
 
     val canDismiss = activeMeeting == null
@@ -175,7 +182,7 @@ fun MeetingBottomSheet(
                     MeetingDurationCard(activeMeeting)
                 }
 
-                // ✅ NEW: CLIENT STATUS SELECTOR (only when ending meeting)
+                // CLIENT STATUS SELECTOR (only when ending meeting)
                 AnimatedVisibility(
                     visible = activeMeeting != null,
                     enter = expandVertically() + fadeIn(),
@@ -270,7 +277,7 @@ fun MeetingBottomSheet(
                     }
                 }
 
-                // ATTACHMENTS
+                // ✅ ATTACHMENTS SECTION
                 AnimatedVisibility(
                     visible = activeMeeting != null,
                     enter = expandVertically() + fadeIn(),
@@ -288,18 +295,32 @@ fun MeetingBottomSheet(
                                 color = Color.White
                             )
 
-                            TextButton(onClick = { filePickerLauncher.launch("*/*") }) {
+                            TextButton(
+                                onClick = {
+                                    // ✅ Launch file picker for ANY file type
+                                    filePickerLauncher.launch("*/*")
+                                },
+                                enabled = !isUploadingAttachments
+                            ) {
+                                if (isUploadingAttachments) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color(0xFF5E92F3)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                }
                                 androidx.compose.material3.Icon(
                                     imageVector = Icons.Default.AttachFile,
                                     contentDescription = null,
                                     tint = Color(0xFF5E92F3)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Text("Add Files", color = Color(0xFF5E92F3))
                             }
                         }
 
-                        if (attachments.isEmpty()) {
+                        if (pendingAttachments.isEmpty()) {
                             Text(
                                 text = "No files attached",
                                 style = AppTheme.typography.body2,
@@ -307,10 +328,11 @@ fun MeetingBottomSheet(
                             )
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                attachments.forEach { uri ->
-                                    AttachmentItem(uri) {
-                                        attachments = attachments - uri
-                                    }
+                                pendingAttachments.forEach { attachment ->
+                                    EnhancedAttachmentItem(
+                                        attachment = attachment,
+                                        onRemove = { onRemoveAttachment(attachment) }
+                                    )
                                 }
                             }
                         }
@@ -347,11 +369,11 @@ fun MeetingBottomSheet(
                 comments = comments,
                 clientStatus = selectedClientStatus,
                 currentStatus = client.status,
-                attachments = attachments,
+                attachmentCount = pendingAttachments.size,
                 onCancel = { showEndConfirmation = false },
                 onConfirm = {
                     showEndConfirmation = false
-                    onEndMeeting(comments, selectedClientStatus, attachments)
+                    onEndMeeting(comments, selectedClientStatus)
                 }
             )
         }
@@ -366,7 +388,8 @@ fun MeetingBottomSheet(
     }
 }
 
-// ✅ NEW: Client Status Chip Component
+// ============ HELPER COMPOSABLES ============
+
 @Composable
 private fun ClientStatusChip(
     label: String,
@@ -403,8 +426,6 @@ private fun ClientStatusChip(
         }
     }
 }
-
-// ============ KEEP ALL OTHER COMPONENTS THE SAME ============
 
 @Composable
 private fun ClientInfoCard(client: Client) {
@@ -567,8 +588,14 @@ private fun MeetingDurationCard(meeting: Meeting) {
     }
 }
 
+/**
+ * ✅ Enhanced attachment item showing file type icon and size
+ */
 @Composable
-private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
+private fun EnhancedAttachmentItem(
+    attachment: AttachmentInfo,
+    onRemove: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -585,24 +612,41 @@ private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
+                // File type icon
                 androidx.compose.material3.Icon(
-                    imageVector = Icons.Default.Description,
+                    imageVector = when {
+                        attachment.fileType.contains("image") -> Icons.Default.Image
+                        attachment.fileType.contains("pdf") -> Icons.Default.PictureAsPdf
+                        attachment.fileType.contains("text") -> Icons.Default.Description
+                        attachment.fileType.contains("video") -> Icons.Default.VideoFile
+                        attachment.fileType.contains("audio") -> Icons.Default.AudioFile
+                        else -> Icons.Default.AttachFile
+                    },
                     contentDescription = null,
                     tint = Color(0xFF5E92F3),
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = uri.lastPathSegment ?: "File",
-                    style = AppTheme.typography.body2,
-                    color = Color.White
-                )
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = attachment.fileName,
+                        style = AppTheme.typography.body2,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "${String.format("%.2f", attachment.sizeMB)} MB",
+                        style = AppTheme.typography.body3,
+                        color = Color(0xFF808080)
+                    )
+                }
             }
 
             IconButton(onClick = onRemove) {
                 androidx.compose.material3.Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = null,
+                    contentDescription = "Remove",
                     tint = Color(0xFFFF5252),
                     modifier = Modifier.size(20.dp)
                 )
@@ -611,13 +655,12 @@ private fun AttachmentItem(uri: Uri, onRemove: () -> Unit) {
     }
 }
 
-// ✅ UPDATED: End Meeting Dialog with client status
 @Composable
 private fun EndMeetingDialog(
     comments: String,
     clientStatus: String,
     currentStatus: String,
-    attachments: List<Uri>,
+    attachmentCount: Int,
     onCancel: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -670,7 +713,13 @@ private fun EndMeetingDialog(
                 }
 
                 Text(
-                    text = "Your notes and attachments will be saved.",
+                    text = buildString {
+                        append("Your notes")
+                        if (attachmentCount > 0) {
+                            append(" and $attachmentCount attachment${if (attachmentCount > 1) "s" else ""}")
+                        }
+                        append(" will be saved.")
+                    },
                     style = AppTheme.typography.body2,
                     color = Color(0xFFB0B0B0)
                 )
